@@ -23,23 +23,34 @@ function listArray(value) {
 const configPath="wrangler.jsonc";
 const config=JSON.parse(readFileSync(configPath,"utf8"));
 
-let kvItems=listArray(json(["kv","namespace","list","--json"]));
+let kvItems=listArray(json(["kv","namespace","list"]));
 let kv=kvItems.find((x)=>x.title==="nestai-cache" || x.name==="nestai-cache");
 if(!kv){
   wrangler(["kv","namespace","create","nestai-cache"]);
-  kvItems=listArray(json(["kv","namespace","list","--json"]));
+  kvItems=listArray(json(["kv","namespace","list"]));
   kv=kvItems.find((x)=>x.title==="nestai-cache" || x.name==="nestai-cache");
 }
 const kvId=kv?.id ?? kv?.namespace_id;
 if(!kvId) throw new Error("NESTAI_KV_ID_NOT_FOUND");
 config.kv_namespaces=[{binding:"CACHE",id:kvId}];
 
-let queues=listArray(json(["queues","list","--json"]));
-for(const name of ["nestai-jobs","nestai-jobs-dlq"]){
-  if(!queues.some((x)=>x.name===name || x.queue_name===name)){
-    wrangler(["queues","create",name]);
-    queues=listArray(json(["queues","list","--json"]));
+function createIfMissing(args, label) {
+  try {
+    wrangler(args);
+    console.log(label+"_CREATED=true");
+  } catch (error) {
+    const stderr=String(error?.stderr??"");
+    const stdout=String(error?.stdout??"");
+    if (/already exists|already been taken|duplicate/i.test(stderr+"\n"+stdout)) {
+      console.log(label+"_REUSED=true");
+      return;
+    }
+    throw error;
   }
+}
+
+for(const name of ["nestai-jobs","nestai-jobs-dlq"]){
+  createIfMissing(["queues","create",name],"QUEUE_"+name.toUpperCase().replaceAll("-","_"));
 }
 config.queues={
   producers:[{binding:"JOBS",queue:"nestai-jobs"}],
@@ -54,18 +65,13 @@ config.queues={
 
 let indexes=listArray(json(["vectorize","list","--json"]));
 if(!indexes.some((x)=>x.name==="nestai-knowledge")){
-  wrangler(["vectorize","create","nestai-knowledge","--dimensions=768","--metric=cosine"]);
+  wrangler(["vectorize","create","nestai-knowledge","--dimensions=768","--metric=cosine","--json"]);
   indexes=listArray(json(["vectorize","list","--json"]));
 }
 if(!indexes.some((x)=>x.name==="nestai-knowledge")) throw new Error("NESTAI_VECTORIZE_NOT_FOUND");
 config.vectorize=[{binding:"VECTORIZE",index_name:"nestai-knowledge"}];
 
-let buckets=listArray(json(["r2","bucket","list","--json"]));
-if(!buckets.some((x)=>x.name==="nestai-knowledge")){
-  wrangler(["r2","bucket","create","nestai-knowledge"]);
-  buckets=listArray(json(["r2","bucket","list","--json"]));
-}
-if(!buckets.some((x)=>x.name==="nestai-knowledge")) throw new Error("NESTAI_R2_BUCKET_NOT_FOUND");
+createIfMissing(["r2","bucket","create","nestai-knowledge"],"R2_NESTAI_KNOWLEDGE");
 config.r2_buckets=[{binding:"KNOWLEDGE_BUCKET",bucket_name:"nestai-knowledge"}];
 
 config.vars={
