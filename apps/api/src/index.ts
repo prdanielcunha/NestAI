@@ -30,7 +30,7 @@ import { getStructuredContract, validateStructuredText } from "../../../packages
 import { CircuitBreaker, executeWithSafeFallback } from "../../../packages/resilience/src/index.js";
 import type { Locale } from "../../../packages/i18n/src/index.js";
 import { cacheGet, cachePut, type KvNamespaceLike } from "../../../packages/cache/src/index.js";
-import { createJob, enqueueJob, getJob, getJobResult, nextAttempt, putJobResult, retryDelaySeconds, updateJobStatus, type JobEnvelope, type QueueLike } from "../../../packages/jobs/src/index.js";
+import { createJob, enqueueJob, getJobForScope, getJobResult, nextAttempt, putJobResult, retryDelaySeconds, updateJobStatus, type JobEnvelope, type QueueLike } from "../../../packages/jobs/src/index.js";
 import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit, controlPlaneRoutes, controlPlanePrompts, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota } from "../../../packages/control-plane/src/index.js";
 import { validateAppManifest, assertManifestTaskOwnership, persistAppManifest } from "../../../packages/app-manifest/src/index.js";
 import { verifyGitHubWorkloadToken } from "../../../packages/workload-auth/src/index.js";
@@ -62,6 +62,11 @@ export type Env = {
   AI_FINANCE_ENABLED?: "true" | "false";
   AI_NESTLUME_ENABLED?: "true" | "false";
   AI_NESTAFFILIATE_ENABLED?: "true" | "false";
+  AI_NESTLOCAL_ENABLED?: "true" | "false";
+  AI_NESTJOURNEY_ENABLED?: "true" | "false";
+  AI_MUSICSCALE_ENABLED?: "true" | "false";
+  AI_HUB_ENABLED?: "true" | "false";
+  AI_JOBS_ENABLED?: "true" | "false";
 };
 
 function json(body: unknown, status = 200): Response {
@@ -114,6 +119,10 @@ function appFlag(task: TaskDefinition, env: Env): "true" | "false" | undefined {
     nestfinance: env.AI_FINANCE_ENABLED,
     nestlume: env.AI_NESTLUME_ENABLED,
     nestaffiliate: env.AI_NESTAFFILIATE_ENABLED,
+    nestlocal: env.AI_NESTLOCAL_ENABLED,
+    nestjourney: env.AI_NESTJOURNEY_ENABLED,
+    musicscale: env.AI_MUSICSCALE_ENABLED,
+    millionsnest: env.AI_HUB_ENABLED,
   };
   return flags[task.app];
 }
