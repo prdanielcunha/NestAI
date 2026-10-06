@@ -19,7 +19,7 @@ import {
 } from "../../../packages/providers/src/index.js";
 import { assertProviderFreeQuota, assertWithinFreeBudget } from "../../../packages/cost-guard/src/index.js";
 import { safeTrace } from "../../../packages/observability/src/index.js";
-import { getUsage, incrementUsage, getDimensionalUsage, incrementDimensionalUsage, type D1DatabaseLike } from "../../../packages/usage-ledger/src/index.js";
+import { incrementUsage, getDimensionalUsage, incrementDimensionalUsage, type D1DatabaseLike } from "../../../packages/usage-ledger/src/index.js";
 import { buildTaskPrompt } from "../../../packages/prompt-registry/src/index.js";
 import { getStructuredContract, validateStructuredText } from "../../../packages/structured-output/src/index.js";
 import { CircuitBreaker, executeWithSafeFallback } from "../../../packages/resilience/src/index.js";
