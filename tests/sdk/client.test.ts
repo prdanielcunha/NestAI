@@ -71,6 +71,44 @@ describe("NestAI SDK", () => {
     expect(hubCalls).toHaveLength(1);
   });
 
+  it("obtains a constrained guest token and uses the public app tenant", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/api/v1/ai/guest-token")) {
+        const body = JSON.parse(String(init?.body));
+        expect(body.appId).toBe("nestlume");
+        expect(body.sessionId).toBe("guest-session-1234567890");
+        expect((init?.headers as Record<string, string>)["x-firebase-appcheck"]).toBe("app-check");
+        return new Response(JSON.stringify({
+          token: "guest-token",
+          expiresIn: 300,
+          organizationId: "public:nestlume",
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      const body = JSON.parse(String(init?.body));
+      expect(body.context.organizationId).toBe("public:nestlume");
+      expect((init?.headers as Record<string, string>).authorization).toBe("Bearer guest-token");
+      return new Response(JSON.stringify({
+        requestId: "req",
+        task: "nestlume.study.answer",
+        version: 1,
+        result: "ok",
+        meta: { providerClass: "free", cached: false, fallbackUsed: false, retries: 0 },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+
+    const client = new NestAiClient({
+      appId: "nestlume",
+      guest: true,
+      guestSessionId: "guest-session-1234567890",
+      getAppCheckToken: async () => "app-check",
+      fetcher,
+    });
+
+    await expect(client.run({ task: "nestlume.study.answer", input: "oi" })).resolves.toMatchObject({ result: "ok" });
+    expect((fetcher as unknown as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+  });
+
   it("parses canonical SSE events", async () => {
     const encoder = new TextEncoder();
     const body = new ReadableStream<Uint8Array>({
