@@ -13,7 +13,9 @@
     "react": "latest",
     "react-dom": "latest",
     "vite": "latest",
-    "@millionsnest/ai": "workspace:*"
+    "@millionsnest/ai": "workspace:*",
+    "@tailwindcss/vite": "latest",
+    "tailwindcss": "latest"
   },
   "devDependencies": {
     "@types/react": "latest",
