@@ -7,6 +7,7 @@ import { routeCandidates } from "../../router/src/index.js";
 import { prompts } from "../../prompt-registry/src/index.js";
 import { getStructuredContract } from "../../structured-output/src/index.js";
 import type { D1DatabaseLike } from "../../usage-ledger/src/index.js";
+import { buildSloSnapshot } from "../../observability/src/index.js";
 
 function utcDay(now = new Date()): string {
   return now.toISOString().slice(0, 10);
@@ -164,7 +165,7 @@ export async function controlPlaneEvaluations(db: D1DatabaseLike) {
 
 export async function controlPlaneObservability(db: D1DatabaseLike, now = new Date()) {
   const day = utcDay(now);
-  const [events, health, total] = await Promise.all([
+  const [events, health, total, alerts, incidents, traces, slo] = await Promise.all([
     db.prepare(
       "SELECT id, event_type, app_id, provider, task, organization_hash, created_at FROM runtime_events WHERE day = ?1 ORDER BY created_at DESC LIMIT 200"
     ).bind(day).all<Record<string, unknown>>(),
@@ -172,8 +173,27 @@ export async function controlPlaneObservability(db: D1DatabaseLike, now = new Da
       "SELECT provider_id, state, success_rate, p50_ms, p95_ms, circuit_state, checked_at FROM cp_provider_health ORDER BY provider_id"
     ).all<Record<string, unknown>>(),
     scalar(db, "SELECT COUNT(*) AS value FROM runtime_events WHERE day = ?1", day),
+    db.prepare(
+      "SELECT alert_id,alert_key,severity,status,message,metadata_json,first_seen_at,last_seen_at,resolved_at FROM cp_alerts ORDER BY last_seen_at DESC LIMIT 100"
+    ).all<Record<string, unknown>>(),
+    db.prepare(
+      "SELECT incident_id,severity,status,title,provider_id,opened_at,resolved_at,metadata_json FROM cp_incidents ORDER BY opened_at DESC LIMIT 100"
+    ).all<Record<string, unknown>>(),
+    db.prepare(
+      "SELECT trace_id,task,app_id,sensitivity,provider,model,duration_ms,ttft_ms,fallback_used,retries,cached,outcome,error_code,created_at FROM request_traces WHERE day=?1 ORDER BY created_at DESC LIMIT 200"
+    ).bind(day).all<Record<string, unknown>>(),
+    buildSloSnapshot(db,now),
   ]);
-  return { day, totalEvents: total, events: events.results ?? [], providerHealth: health.results ?? [] };
+  return {
+    day,
+    totalEvents: total,
+    events: events.results ?? [],
+    traces: traces.results ?? [],
+    providerHealth: health.results ?? [],
+    alerts: alerts.results ?? [],
+    incidents: incidents.results ?? [],
+    slo,
+  };
 }
 
 export async function controlPlaneCostQuota(db: D1DatabaseLike, now = new Date()) {
