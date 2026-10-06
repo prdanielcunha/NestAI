@@ -19,10 +19,19 @@ function baseEnv(): Env {
     HUB_JWKS_URL: "https://www.millionsnest.com/api/v1/ai/jwks",
     HUB_TOKEN_ISSUER: "https://millionsnest.com",
     NESTAI_TOKEN_AUDIENCE: "nestai",
+    FIREBASE_PROJECT_NUMBER: "555464791734",
+    APP_CHECK_REQUIRED: "false",
     AI_BILLING_MODE: "FREE_ONLY",
     ALLOW_PAID_FALLBACK: "false",
     AUTO_UPGRADE_PROVIDER: "false",
     AI_PAID_ENABLED: "false",
+    AI_ALL_ENABLED: "true",
+    AI_EXTERNAL_PROVIDERS_ENABLED: "true",
+    AI_TOOLS_WRITE_ENABLED: "false",
+    AI_CONNECT_ENABLED: "true",
+    AI_FINANCE_ENABLED: "true",
+    AI_NESTLUME_ENABLED: "true",
+    AI_NESTAFFILIATE_ENABLED: "true",
   };
 }
 
@@ -63,7 +72,18 @@ describe("Worker API", () => {
   it("exposes a minimal non-secret health response", async () => {
     const response = await handleRequest(new Request("https://ai.millionsnest.com/health"), baseEnv());
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true, service: "nestai", billingMode: "FREE_ONLY", providers: { cloudflare: "ready", groq: "unconfigured" } });
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      service: "nestai",
+      billingMode: "FREE_ONLY",
+      appCheck: "optional",
+      providers: {
+        cloudflare: "ready",
+        groq: "unconfigured",
+        gemini: "unconfigured",
+        mistral: "unconfigured",
+      },
+    });
   });
 
   it("requires authentication for task execution", async () => {
@@ -89,6 +109,7 @@ describe("Worker API", () => {
       headers: {
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
+        "x-millionsnest-app": "nestlume",
       },
       body: JSON.stringify({
         task: "nestlume.study.answer",
@@ -98,9 +119,18 @@ describe("Worker API", () => {
     }), baseEnv());
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { output: string; route: { provider: string } };
-    expect(body.output).toBe("ok");
-    expect(body.route.provider).toBe("cloudflare");
+    const body = await response.json() as {
+      requestId: string;
+      task: string;
+      version: number;
+      result: string;
+      meta: { providerClass: string; fallbackUsed: boolean };
+    };
+    expect(body.task).toBe("nestlume.study.answer");
+    expect(body.version).toBe(1);
+    expect(body.result).toBe("ok");
+    expect(body.meta.providerClass).toBe("free");
+    expect(body.meta.fallbackUsed).toBe(false);
     expect(fetchMock).toHaveBeenCalledOnce();
     fetchMock.mockRestore();
   });
