@@ -54,6 +54,17 @@ export const prompts: Record<string, PromptDefinition> = {
       es: "Responde como apoyo de estudio. Distingue texto fuente, interpretación e inferencia. Cuando haya evidencia recuperada, cita solo la evidencia suministrada.",
     },
   },
+  "journey.form.extract": {
+    id: "journey.form.extract",
+    taskId: "journey.form.extract",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "A partir do texto OCR fornecido, extraia somente candidatos visíveis da ficha. Não cadastre ninguém, não complete letra ilegível e marque revisão humana obrigatória.",
+      en: "From the supplied OCR text, extract only visible form candidates. Do not register anyone, do not guess unreadable text, and require human review.",
+      es: "A partir del texto OCR suministrado, extrae solo candidatos visibles de la ficha. No registres a nadie, no adivines texto ilegible y exige revisión humana.",
+    },
+  },
   "affiliate.pin.copy": {
     id: "affiliate.pin.copy",
     taskId: "affiliate.pin.copy",
