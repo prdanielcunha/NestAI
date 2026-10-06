@@ -16,8 +16,23 @@ export type GenerateResult = {
   usage?: { inputTokens: number | undefined; outputTokens: number | undefined };
 };
 
+export type MarkdownConversionResult = {
+  id?: string;
+  name?: string;
+  format: "markdown" | "text" | "error";
+  mimeType?: string;
+  mimetype?: string;
+  tokens?: number;
+  data?: string;
+  error?: string;
+};
+
 export interface WorkersAiBinding {
   run(model: string, input: unknown, options?: unknown): Promise<unknown>;
+  toMarkdown?(
+    files: { name: string; blob: Blob } | Array<{ name: string; blob: Blob }>,
+    options?: unknown,
+  ): Promise<MarkdownConversionResult | MarkdownConversionResult[]>;
 }
 
 function groqResponseFormat(schema: JsonSchema | undefined): unknown {
@@ -305,4 +320,99 @@ export async function streamWithMistral(apiKey: string, request: GenerateRequest
   });
   if (!response.ok) throw new Error("PROVIDER_MISTRAL_HTTP_" + response.status);
   return parseOpenAiCompatibleSse(response);
+}
+
+
+function base64Bytes(value:string):Uint8Array {
+  const binary=atob(value);
+  return Uint8Array.from(binary,(char)=>char.charCodeAt(0));
+}
+
+export async function transcribeWithCloudflare(
+  ai:WorkersAiBinding,
+  model:string,
+  audioBase64:string,
+  language?:string,
+):Promise<{text:string;vtt?:string;wordCount?:number}> {
+  const response=await ai.run(model,{
+    audio:audioBase64,
+    task:"transcribe",
+    ...(language?{language}:{}),
+    vad_filter:true,
+    condition_on_previous_text:false,
+  },{gateway:{id:"default",collectLog:false},rejectIfBusy:true}) as {
+    text?:string;vtt?:string;word_count?:number;
+  };
+  if(!response.text) throw new Error("PROVIDER_EMPTY_TRANSCRIPTION");
+  return {text:response.text,vtt:response.vtt,wordCount:response.word_count};
+}
+
+export async function transcribeWithGroq(
+  apiKey:string,
+  model:string,
+  args:{audioBase64:string;mimeType:string;fileName?:string;language?:string;signal?:AbortSignal},
+):Promise<{text:string}> {
+  if(!apiKey) throw new Error("PROVIDER_GROQ_KEY_MISSING");
+  const form=new FormData();
+  const bytes=base64Bytes(args.audioBase64);
+  form.set("file",new Blob([bytes],{type:args.mimeType}),args.fileName??"audio.webm");
+  form.set("model",model);
+  if(args.language) form.set("language",args.language);
+  form.set("response_format","json");
+  const response=await fetch("https://api.groq.com/openai/v1/audio/transcriptions",{
+    method:"POST",
+    headers:{authorization:"Bearer "+apiKey},
+    ...(args.signal?{signal:args.signal}:{}),
+    body:form,
+  });
+  if(!response.ok) throw new Error("PROVIDER_GROQ_HTTP_"+response.status);
+  const body=await response.json() as {text?:string};
+  if(!body.text) throw new Error("PROVIDER_EMPTY_TRANSCRIPTION");
+  return {text:body.text};
+}
+
+export async function extractDocumentTextWithCloudflare(
+  ai:WorkersAiBinding,
+  args:{base64:string;mimeType:string;fileName:string;locale:"pt-BR"|"en"|"es"},
+):Promise<{text:string;tokens?:number}> {
+  if(!ai.toMarkdown) throw new Error("PROVIDER_MARKDOWN_CONVERSION_UNAVAILABLE");
+  const result=await ai.toMarkdown(
+    {name:args.fileName,blob:new Blob([base64Bytes(args.base64)],{type:args.mimeType})},
+    {
+      conversionOptions:{
+        output:{format:"text"},
+        image:{descriptionLanguage:args.locale==="pt-BR"?"pt":args.locale},
+        pdf:{metadata:false},
+      },
+    },
+  );
+  const item=Array.isArray(result)?result[0]:result;
+  if(!item || item.format==="error" || !item.data) throw new Error("PROVIDER_DOCUMENT_CONVERSION_FAILED");
+  return {text:item.data,tokens:item.tokens};
+}
+
+export async function embedWithCloudflare(
+  ai:WorkersAiBinding,
+  model:string,
+  text:string|string[],
+):Promise<number[][]> {
+  const response=await ai.run(model,{text},{gateway:{id:"default",collectLog:false},rejectIfBusy:true}) as {
+    data?:number[][];
+  };
+  if(!Array.isArray(response.data) || response.data.length===0) throw new Error("PROVIDER_EMPTY_EMBEDDING");
+  return response.data;
+}
+
+export async function generateImageWithCloudflare(
+  ai:WorkersAiBinding,
+  model:string,
+  args:{prompt:string;steps?:number;seed?:number},
+):Promise<{imageBase64:string;mimeType:"image/jpeg"}> {
+  const response=await ai.run(model,{
+    prompt:args.prompt,
+    steps:Math.min(8,Math.max(1,args.steps??4)),
+    ...(args.seed!==undefined?{seed:args.seed}:{}),
+  },{gateway:{id:"default",collectLog:false},rejectIfBusy:true}) as {image?:string};
+  if(!response.image) throw new Error("PROVIDER_EMPTY_IMAGE");
+  return {imageBase64:response.image,mimeType:"image/jpeg"};
 }
