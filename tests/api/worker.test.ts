@@ -44,7 +44,7 @@ function baseEnv(): Env {
 }
 
 
-async function issueWorkerToken() {
+async function issueWorkerToken(overrides: Record<string, unknown> = {}) {
   const pair = await crypto.subtle.generateKey(
     { name: "ECDSA", namedCurve: "P-256" },
     true,
@@ -63,6 +63,7 @@ async function issueWorkerToken() {
     capabilities: ["ai:run", "ai:stream"],
     iat: now,
     exp: now + 300,
+    ...overrides,
   });
   const input = `${header}.${payload}`;
   const signature = await crypto.subtle.sign(
@@ -102,6 +103,74 @@ describe("Worker API", () => {
         mistral: "unconfigured",
       },
     });
+  });
+
+  it("allows a constrained guest token for NestLume P1", async () => {
+    resetHubJwksCacheForTests();
+    const { token, publicJwk } = await issueWorkerToken({
+      sub: "guest:test",
+      organizationId: "public:nestlume",
+      appId: "nestlume",
+      tokenType: "guest",
+      appCheckAppId: "1:555464791734:web:test",
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
+      keys: [publicJwk],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+
+    const env = baseEnv();
+    env.APP_CHECK_REQUIRED = "false";
+    const response = await handleRequest(new Request("https://ai.millionsnest.com/v1/run", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        "x-millionsnest-app": "nestlume",
+      },
+      body: JSON.stringify({
+        task: "nestlume.study.answer",
+        input: "Explique o texto fornecido.",
+        context: { organizationId: "public:nestlume", locale: "pt-BR" },
+      }),
+    }), env);
+
+    expect(response.status).toBe(200);
+    fetchMock.mockRestore();
+  });
+
+  it("denies guest tokens from P2 tasks even with valid signature and capability", async () => {
+    resetHubJwksCacheForTests();
+    const { token, publicJwk } = await issueWorkerToken({
+      sub: "guest:test",
+      organizationId: "public:connect",
+      appId: "connect",
+      tokenType: "guest",
+      appCheckAppId: "1:555464791734:web:test",
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
+      keys: [publicJwk],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+
+    const env = baseEnv();
+    env.APP_CHECK_REQUIRED = "false";
+    const response = await handleRequest(new Request("https://ai.millionsnest.com/v1/run", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        "x-millionsnest-app": "connect",
+      },
+      body: JSON.stringify({
+        task: "connect.reply.suggest",
+        input: "Mensagem pessoal de teste",
+        context: { organizationId: "public:connect", locale: "pt-BR" },
+      }),
+    }), env);
+
+    expect(response.status).toBe(401);
+    const body = await response.json() as { error: string };
+    expect(body.error).toBe("AUTH_GUEST_SENSITIVITY_DENIED");
+    fetchMock.mockRestore();
   });
 
   it("requires authentication for task execution", async () => {
