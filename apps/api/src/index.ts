@@ -486,6 +486,257 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     }
   }
 
+  if (request.method === "POST" && url.pathname === "/v1/transcribe") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    const started = Date.now();
+    try {
+      const prepared = await prepareTaskExecution(request, env, "audio");
+      const input = AudioInput.parse(prepared.parsed.input);
+      const candidates = await safeCandidates(env, prepared, "audio");
+
+      const execution = await executeWithSafeFallback({
+        candidates,
+        keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
+        breaker,
+        maxRetriesPerCandidate: 1,
+        execute: async ({ candidate }) => {
+          await recordProviderAttempt(env, prepared.claims, prepared.task, prepared.organizationId, candidate.provider);
+          if (candidate.provider === "cloudflare") {
+            return withTimeout(
+              () => transcribeWithCloudflare(env.AI, candidate.providerModelId, input.audioBase64, input.language),
+              prepared.task.timeoutMs,
+            );
+          }
+          if (candidate.provider === "groq") {
+            return withTimeout(
+              (signal) => transcribeWithGroq(env.GROQ_API_KEY ?? "", candidate.providerModelId, {
+                audioBase64: input.audioBase64,
+                mimeType: input.mimeType,
+                fileName: input.fileName,
+                language: input.language,
+                signal,
+              }),
+              prepared.task.timeoutMs,
+            );
+          }
+          throw new Error("PROVIDER_MODALITY_UNSUPPORTED");
+        },
+      });
+
+      const trace = await safeTrace({
+        traceId: requestId,
+        task: prepared.task.id,
+        appId: prepared.task.app,
+        organizationId: prepared.organizationId,
+        sensitivity: prepared.sensitivity,
+        provider: execution.candidate.provider,
+        model: execution.candidate.providerModelId,
+        durationMs: Date.now() - started,
+        fallbackUsed: execution.fallbackUsed,
+        retries: execution.retries,
+        cached: false,
+        outputValidation: "not_required",
+        toolUsage: false,
+        outcome: "success",
+      });
+      console.log(JSON.stringify(trace));
+      return json({
+        requestId,
+        task: prepared.task.id,
+        version: prepared.task.version,
+        result: execution.result,
+        meta: { providerClass: "free", cached: false, fallbackUsed: execution.fallbackUsed, retries: execution.retries },
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      console.error(JSON.stringify({ requestId, code, durationMs: Date.now() - started, modality: "audio" }));
+      return json({ requestId, error: code }, statusFor(code));
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/vision") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    const started = Date.now();
+    try {
+      const prepared = await prepareTaskExecution(request, env, "vision");
+      const input = VisionInput.parse(prepared.parsed.input);
+
+      // Conversion is intentionally Cloudflare-only for P3-capable OCR/document parsing.
+      await recordProviderAttempt(env, prepared.claims, prepared.task, prepared.organizationId, "cloudflare");
+      const converted = await withTimeout(
+        () => extractDocumentTextWithCloudflare(env.AI, {
+          base64: input.fileBase64,
+          mimeType: input.mimeType,
+          fileName: input.fileName,
+          locale: prepared.locale,
+        }),
+        Math.min(prepared.task.timeoutMs, 25_000),
+      );
+
+      const structured = getStructuredContract(prepared.task.id);
+      const textCandidates = await safeCandidates(env, prepared, "text", structured !== null);
+      const prompt = buildTaskPrompt({
+        taskId: prepared.task.id,
+        locale: prepared.locale,
+        input: { extractedText: converted.text },
+      });
+
+      const execution = await executeWithSafeFallback({
+        candidates: textCandidates,
+        keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
+        breaker,
+        maxRetriesPerCandidate: 1,
+        execute: async ({ candidate }) => {
+          await recordProviderAttempt(env, prepared.claims, prepared.task, prepared.organizationId, candidate.provider);
+          return withTimeout(
+            (signal) => generateForRoute(env, {
+              route: candidate,
+              messages: prompt.messages,
+              maxTokens: prepared.task.maxOutputTokens,
+              responseSchema: structured?.jsonSchema,
+              signal,
+            }),
+            prepared.task.timeoutMs,
+          );
+        },
+      });
+
+      const result = validateStructuredText(prepared.task.id, execution.result.text);
+      const trace = await safeTrace({
+        traceId: requestId,
+        task: prepared.task.id,
+        appId: prepared.task.app,
+        organizationId: prepared.organizationId,
+        sensitivity: prepared.sensitivity,
+        provider: execution.candidate.provider,
+        model: execution.candidate.providerModelId,
+        promptVersion: prompt.promptVersion,
+        durationMs: Date.now() - started,
+        fallbackUsed: execution.fallbackUsed,
+        retries: execution.retries,
+        cached: false,
+        outputValidation: structured ? "passed" : "not_required",
+        toolUsage: false,
+        outcome: "success",
+      });
+      console.log(JSON.stringify(trace));
+      return json({
+        requestId,
+        task: prepared.task.id,
+        version: prepared.task.version,
+        result,
+        meta: {
+          providerClass: "free",
+          cached: false,
+          fallbackUsed: execution.fallbackUsed,
+          retries: execution.retries,
+          humanReviewRequired: prepared.task.id === "journey.form.extract",
+        },
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      console.error(JSON.stringify({ requestId, code, durationMs: Date.now() - started, modality: "vision" }));
+      return json({ requestId, error: code }, statusFor(code));
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/embeddings") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    const started = Date.now();
+    try {
+      const prepared = await prepareTaskExecution(request, env, "embedding");
+      const input = EmbeddingInput.parse(prepared.parsed.input);
+      const [candidate] = await safeCandidates(env, prepared, "embedding");
+      if (!candidate || candidate.provider !== "cloudflare") throw new Error("ROUTER_NO_ELIGIBLE_MODEL");
+      await recordProviderAttempt(env, prepared.claims, prepared.task, prepared.organizationId, candidate.provider);
+      const vectors = await withTimeout(
+        () => embedWithCloudflare(env.AI, candidate.providerModelId, input.texts),
+        prepared.task.timeoutMs,
+      );
+      const trace = await safeTrace({
+        traceId: requestId,
+        task: prepared.task.id,
+        appId: prepared.task.app,
+        organizationId: prepared.organizationId,
+        sensitivity: prepared.sensitivity,
+        provider: candidate.provider,
+        model: candidate.providerModelId,
+        durationMs: Date.now() - started,
+        fallbackUsed: false,
+        retries: 0,
+        cached: false,
+        outputValidation: "not_required",
+        toolUsage: false,
+        outcome: "success",
+      });
+      console.log(JSON.stringify(trace));
+      return json({
+        requestId,
+        task: prepared.task.id,
+        version: prepared.task.version,
+        result: { vectors, dimensions: vectors[0]?.length ?? 0 },
+        meta: { providerClass: "free", cached: false, fallbackUsed: false, retries: 0 },
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      console.error(JSON.stringify({ requestId, code, durationMs: Date.now() - started, modality: "embedding" }));
+      return json({ requestId, error: code }, statusFor(code));
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/image") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    const started = Date.now();
+    try {
+      const prepared = await prepareTaskExecution(request, env, "image");
+      const input = ImageInput.parse(prepared.parsed.input);
+      const [candidate] = await safeCandidates(env, prepared, "image");
+      if (!candidate || candidate.provider !== "cloudflare") throw new Error("ROUTER_NO_ELIGIBLE_MODEL");
+
+      const imageUsage = await getDimensionalUsage(env.DB, {
+        scopeType: "provider",
+        scopeId: candidate.provider,
+        provider: candidate.provider,
+        task: prepared.task.id,
+      });
+      if (imageUsage.provider_calls >= 20) throw new Error("COST_GUARD_IMAGE_DAILY_LIMIT");
+
+      await recordProviderAttempt(env, prepared.claims, prepared.task, prepared.organizationId, candidate.provider);
+      const result = await withTimeout(
+        () => generateImageWithCloudflare(env.AI, candidate.providerModelId, input),
+        prepared.task.timeoutMs,
+      );
+      const trace = await safeTrace({
+        traceId: requestId,
+        task: prepared.task.id,
+        appId: prepared.task.app,
+        organizationId: prepared.organizationId,
+        sensitivity: prepared.sensitivity,
+        provider: candidate.provider,
+        model: candidate.providerModelId,
+        durationMs: Date.now() - started,
+        fallbackUsed: false,
+        retries: 0,
+        cached: false,
+        outputValidation: "not_required",
+        toolUsage: false,
+        outcome: "success",
+      });
+      console.log(JSON.stringify(trace));
+      return json({
+        requestId,
+        task: prepared.task.id,
+        version: prepared.task.version,
+        result,
+        meta: { providerClass: "free", cached: false, fallbackUsed: false, retries: 0 },
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      console.error(JSON.stringify({ requestId, code, durationMs: Date.now() - started, modality: "image" }));
+      return json({ requestId, error: code }, statusFor(code));
+    }
+  }
+
   if (request.method === "POST" && url.pathname === "/v1/chat/stream") {
     const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
     const started = Date.now();
