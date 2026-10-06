@@ -479,7 +479,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     });
     if (candidates.length === 0) throw new Error("ROUTER_NO_ELIGIBLE_MODEL");
 
-    const quotaCandidates = await quotaEligibleCandidates(env, organizationId, candidates);
+    const quotaCandidates = await quotaEligibleCandidates(env, claims, task, organizationId, candidates);
     const locale = (parsed.context.locale ?? claims.locale ?? "pt-BR") as Locale;
     const prompt = buildTaskPrompt({ taskId: task.id, locale, input: parsed.input });
 
