@@ -175,6 +175,38 @@ async function authenticateAdminRequest(request: Request, env: Env): Promise<Nes
   return claims;
 }
 
+async function authenticateScopedRequest(request: Request, env: Env): Promise<NestAiClaims> {
+  const authorization = request.headers.get("authorization");
+  if (!authorization?.startsWith("Bearer ")) throw new Error("AUTH_MISSING_BEARER");
+
+  const organizationId = request.headers.get("x-millionsnest-org");
+  if (!organizationId) throw new Error("AUTH_TENANT_REQUIRED");
+  const appId = request.headers.get("x-millionsnest-app");
+  if (!appId) throw new Error("AUTH_APP_HEADER_MISMATCH");
+
+  const token = authorization.slice(7);
+  const publicJwk = await resolveHubPublicJwk(token, env);
+  const claims = await verifyNestAiToken(token, {
+    issuer: env.HUB_TOKEN_ISSUER,
+    audience: env.NESTAI_TOKEN_AUDIENCE,
+    publicJwk,
+    expectedOrganizationId: organizationId,
+    expectedAppId: appId,
+  });
+  requireCapability(claims, "ai:run");
+
+  if (claims.tokenType !== "service" && env.APP_CHECK_REQUIRED === "true") {
+    const appCheckToken = request.headers.get("x-firebase-appcheck");
+    if (!appCheckToken) throw new Error("APP_CHECK_REQUIRED");
+    if (!claims.appCheckAppId) throw new Error("APP_CHECK_BINDING_MISSING");
+    await verifyFirebaseAppCheckToken(appCheckToken, {
+      projectNumber: env.FIREBASE_PROJECT_NUMBER,
+      expectedAppId: claims.appCheckAppId,
+    });
+  }
+  return claims;
+}
+
 async function authenticateRequest(args: {
   request: Request;
   env: Env;
