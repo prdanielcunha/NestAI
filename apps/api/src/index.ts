@@ -767,6 +767,194 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     }
   }
 
+  if (request.method === "POST" && url.pathname === "/v1/admin/knowledge/ingest") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    try {
+      await authenticateAdminRequest(request, env);
+      if (env.AI_VECTORIZE_ENABLED !== "true" || !env.VECTORIZE) throw new Error("RAG_VECTORIZE_UNAVAILABLE");
+      const raw = await request.json();
+      const input = KnowledgeIngestRequest.parse(raw);
+      const privacy = classifyPrivacy(input.text, input.sensitivity);
+      if (!privacy.externalAllowed) throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
+
+      const providerUsage = await getDimensionalUsage(env.DB, {
+        scopeType: "provider",
+        scopeId: "cloudflare",
+        provider: "cloudflare",
+      });
+      assertProviderFreeQuota("cloudflare", providerUsage.provider_calls, "background");
+
+      const embedded = await upsertKnowledge({
+        vectorize: env.VECTORIZE,
+        sourceId: input.sourceId,
+        appId: input.appId,
+        organizationId: input.organizationId,
+        sensitivity: privacy.sensitivity,
+        locale: input.locale,
+        ...(input.title ? { title: input.title } : {}),
+        ...(input.locatorPrefix ? { locatorPrefix: input.locatorPrefix } : {}),
+        text: input.text,
+        embed: async (texts) => {
+          const vectors: number[][] = [];
+          for (let index = 0; index < texts.length; index += 32) {
+            const batch = texts.slice(index, index + 32);
+            const chunkVectors = await embedWithCloudflare(env.AI, "@cf/google/embeddinggemma-300m", batch);
+            vectors.push(...chunkVectors);
+            await incrementDimensionalUsage(env.DB, [
+              { scopeType: "provider", scopeId: "cloudflare", provider: "cloudflare", task: "rag.ingest" },
+              { scopeType: "app", scopeId: input.appId, provider: "cloudflare", task: "rag.ingest" },
+              { scopeType: "organization", scopeId: input.organizationId, provider: "cloudflare", task: "rag.ingest" },
+            ]);
+          }
+          return vectors;
+        },
+      });
+      await persistKnowledgeSource(env.DB, {
+        sourceId: input.sourceId,
+        appId: input.appId,
+        organizationId: input.organizationId,
+        sensitivity: privacy.sensitivity,
+        locale: input.locale,
+        status: "ready",
+        chunks: embedded.chunks,
+        metadata: {
+          title: input.title ?? null,
+          locatorPrefix: input.locatorPrefix ?? null,
+          sourcePayloadStored: false,
+        },
+      });
+      return json({
+        requestId,
+        sourceId: input.sourceId,
+        status: "ready",
+        chunks: embedded.chunks,
+      }, 201);
+    } catch (error) {
+      const code = errorCode(error);
+      const status = code.startsWith("RAG_") ? 503 : statusFor(code);
+      return json({ requestId, error: code }, status);
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/rag/query") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    const started = Date.now();
+    try {
+      if (env.AI_VECTORIZE_ENABLED !== "true" || !env.VECTORIZE) throw new Error("RAG_VECTORIZE_UNAVAILABLE");
+      const raw = await request.json();
+      const input = RagQueryRequest.parse(raw);
+      const task = getTask(input.task);
+      if (task.modality !== "text" || task.rag !== true) throw new Error("RAG_TASK_NOT_ALLOWED");
+      assertKillSwitches(task, env);
+
+      const organizationId = input.context.organizationId;
+      const claims = await authenticateRequest({ request, env, task, organizationId });
+      const rate = await env.AI_RATE_LIMITER.limit({ key: claims.organizationId + ":" + claims.sub });
+      if (!rate.success) throw new Error("RATE_LIMITED");
+
+      const privacy = classifyPrivacy(input.query, task.defaultSensitivity);
+      if (!privacy.externalAllowed) throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
+
+      await recordProviderAttempt(env, claims, task, organizationId, "cloudflare");
+      const [queryVector] = await embedWithCloudflare(env.AI, "@cf/google/embeddinggemma-300m", input.query);
+      if (!queryVector) throw new Error("RAG_QUERY_EMBEDDING_EMPTY");
+
+      const evidence = await queryKnowledge({
+        vectorize: env.VECTORIZE,
+        appId: task.app,
+        organizationId,
+        maxSensitivity: task.defaultSensitivity,
+        locale: input.context.locale,
+        queryVector,
+        topK: input.topK,
+      });
+
+      const parsed = TaskRequest.parse({
+        task: task.id,
+        input: input.query,
+        context: {
+          organizationId,
+          locale: input.context.locale,
+        },
+      });
+      const prepared: PreparedTaskExecution = {
+        parsed,
+        task,
+        organizationId,
+        claims,
+        sensitivity: privacy.sensitivity,
+        locale: input.context.locale,
+      };
+      const candidates = await safeCandidates(env, prepared, "text");
+      const prompt = buildTaskPrompt({
+        taskId: task.id,
+        locale: input.context.locale,
+        input: input.query,
+        evidence: evidence.map((item) => ({
+          text: item.text,
+          evidence: item.evidence,
+        })),
+      });
+      const execution = await executeWithSafeFallback({
+        candidates,
+        keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
+        breaker,
+        maxRetriesPerCandidate: 1,
+        execute: async ({ candidate }) => {
+          await recordProviderAttempt(env, claims, task, organizationId, candidate.provider);
+          return withTimeout(
+            (signal) => generateForRoute(env, {
+              route: candidate,
+              messages: prompt.messages,
+              maxTokens: task.maxOutputTokens,
+              signal,
+            }),
+            task.timeoutMs,
+          );
+        },
+      });
+
+      const trace = await safeTrace({
+        traceId: requestId,
+        task: task.id,
+        appId: task.app,
+        organizationId,
+        sensitivity: privacy.sensitivity,
+        provider: execution.result.provider,
+        model: execution.result.model,
+        promptVersion: prompt.promptVersion,
+        durationMs: Date.now() - started,
+        fallbackUsed: execution.fallbackUsed,
+        retries: execution.retries,
+        cached: false,
+        outputValidation: "not_required",
+        toolUsage: false,
+        outcome: "success",
+      });
+      console.log(JSON.stringify(trace));
+
+      return json({
+        requestId,
+        task: task.id,
+        version: task.version,
+        result: {
+          answer: execution.result.text,
+          evidenceRefs: evidence.map((item) => item.evidence),
+        },
+        meta: {
+          providerClass: "free",
+          cached: false,
+          fallbackUsed: execution.fallbackUsed,
+          retries: execution.retries,
+        },
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      const status = code.startsWith("RAG_") ? 503 : statusFor(code);
+      return json({ requestId, error: code }, status);
+    }
+  }
+
   if (request.method === "POST" && url.pathname === "/v1/jobs") {
     const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
     try {
