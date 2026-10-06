@@ -30,6 +30,7 @@ import { getStructuredContract, validateStructuredText } from "../../../packages
 import { CircuitBreaker, executeWithSafeFallback } from "../../../packages/resilience/src/index.js";
 import type { Locale } from "../../../packages/i18n/src/index.js";
 import { cacheGet, cachePut, type KvNamespaceLike } from "../../../packages/cache/src/index.js";
+import { createJob, enqueueJob, getJob, getJobResult, nextAttempt, putJobResult, retryDelaySeconds, updateJobStatus, type JobEnvelope, type QueueLike } from "../../../packages/jobs/src/index.js";
 import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit, controlPlaneRoutes, controlPlanePrompts, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota } from "../../../packages/control-plane/src/index.js";
 import { validateAppManifest, assertManifestTaskOwnership, persistAppManifest } from "../../../packages/app-manifest/src/index.js";
 import { verifyGitHubWorkloadToken } from "../../../packages/workload-auth/src/index.js";
@@ -41,6 +42,7 @@ export type Env = {
   AI_RATE_LIMITER: RateLimiter;
   DB: D1DatabaseLike;
   CACHE?: KvNamespaceLike;
+  JOBS?: QueueLike<JobEnvelope>;
   GROQ_API_KEY?: string;
   GEMINI_API_KEY?: string;
   MISTRAL_API_KEY?: string;
