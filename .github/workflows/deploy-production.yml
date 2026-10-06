@@ -24,3 +24,31 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Live Worker smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL="https://nestai.pastordanielpcunha.workers.dev"
+
+          curl --fail --silent --show-error \
+            --retry 8 --retry-delay 2 --retry-all-errors \
+            "$BASE_URL/health" -o /tmp/health.json
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const health = JSON.parse(fs.readFileSync('/tmp/health.json','utf8'));
+          if (health.ok !== true || health.service !== 'nestai' || health.billingMode !== 'FREE_ONLY') {
+            throw new Error('NESTAI_LIVE_HEALTH_INVALID');
+          }
+          console.log('NESTAI_LIVE_HEALTH_OK');
+          NODE
+
+          STATUS="$(curl --silent --show-error \
+            -o /tmp/run-unauth.json \
+            -w '%{http_code}' \
+            -X POST \
+            -H 'content-type: application/json' \
+            --data '{"task":"nestlume.study.answer","input":"smoke","context":{"organizationId":"smoke"}}' \
+            "$BASE_URL/v1/run")"
+          test "$STATUS" = "401"
+          node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/run-unauth.json','utf8'));if(x.error!=='AUTH_MISSING_BEARER')process.exit(1);console.log('NESTAI_LIVE_AUTH_GATE_OK');"
