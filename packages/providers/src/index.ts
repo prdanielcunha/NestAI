@@ -39,7 +39,7 @@ export async function generateWithCloudflare(ai: WorkersAiBinding, request: Gene
       messages: request.messages,
       max_tokens: request.maxTokens ?? 1024,
     },
-    { gateway: { id: "default", collectLog: true } },
+    { gateway: { id: "default", collectLog: false } },
   ) as {
     response?: string;
     result?: { response?: string };
@@ -239,7 +239,7 @@ export async function streamWithCloudflare(ai: WorkersAiBinding, request: Genera
       max_tokens: request.maxTokens ?? 1024,
       stream: true,
     },
-    { gateway: { id: "default", collectLog: true } },
+    { gateway: { id: "default", collectLog: false } },
   );
   if (!(response instanceof ReadableStream)) throw new Error("PROVIDER_STREAM_UNSUPPORTED");
   return parseCloudflareSse(response);
