@@ -27,7 +27,16 @@
     "AI_PAID_ENABLED": "false",
     "HUB_TOKEN_ISSUER": "https://millionsnest.com",
     "NESTAI_TOKEN_AUDIENCE": "nestai",
-    "HUB_JWKS_URL": "https://www.millionsnest.com/api/v1/ai/jwks"
+    "HUB_JWKS_URL": "https://www.millionsnest.com/api/v1/ai/jwks",
+    "AI_ALL_ENABLED": "true",
+    "AI_EXTERNAL_PROVIDERS_ENABLED": "true",
+    "AI_TOOLS_WRITE_ENABLED": "false",
+    "AI_CONNECT_ENABLED": "true",
+    "AI_FINANCE_ENABLED": "true",
+    "AI_NESTLUME_ENABLED": "true",
+    "AI_NESTAFFILIATE_ENABLED": "true",
+    "FIREBASE_PROJECT_NUMBER": "555464791734",
+    "APP_CHECK_REQUIRED": "true"
   },
   "d1_databases": [
     {
