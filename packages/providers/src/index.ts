@@ -328,6 +328,10 @@ function base64Bytes(value:string):Uint8Array {
   return Uint8Array.from(binary,(char)=>char.charCodeAt(0));
 }
 
+function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
 export async function transcribeWithCloudflare(
   ai:WorkersAiBinding,
   model:string,
@@ -344,7 +348,7 @@ export async function transcribeWithCloudflare(
     text?:string;vtt?:string;word_count?:number;
   };
   if(!response.text) throw new Error("PROVIDER_EMPTY_TRANSCRIPTION");
-  return {text:response.text,vtt:response.vtt,wordCount:response.word_count};
+  return { text: response.text, ...(response.vtt ? { vtt: response.vtt } : {}), ...(response.word_count !== undefined ? { wordCount: response.word_count } : {}) };
 }
 
 export async function transcribeWithGroq(
@@ -355,7 +359,7 @@ export async function transcribeWithGroq(
   if(!apiKey) throw new Error("PROVIDER_GROQ_KEY_MISSING");
   const form=new FormData();
   const bytes=base64Bytes(args.audioBase64);
-  form.set("file",new Blob([bytes],{type:args.mimeType}),args.fileName??"audio.webm");
+  form.set("file",new Blob([bytesToArrayBuffer(bytes)],{type:args.mimeType}),args.fileName??"audio.webm");
   form.set("model",model);
   if(args.language) form.set("language",args.language);
   form.set("response_format","json");
@@ -377,7 +381,7 @@ export async function extractDocumentTextWithCloudflare(
 ):Promise<{text:string;tokens?:number}> {
   if(!ai.toMarkdown) throw new Error("PROVIDER_MARKDOWN_CONVERSION_UNAVAILABLE");
   const result=await ai.toMarkdown(
-    {name:args.fileName,blob:new Blob([base64Bytes(args.base64)],{type:args.mimeType})},
+    {name:args.fileName,blob:new Blob([bytesToArrayBuffer(base64Bytes(args.base64))],{type:args.mimeType})},
     {
       conversionOptions:{
         output:{format:"text"},
@@ -388,7 +392,7 @@ export async function extractDocumentTextWithCloudflare(
   );
   const item=Array.isArray(result)?result[0]:result;
   if(!item || item.format==="error" || !item.data) throw new Error("PROVIDER_DOCUMENT_CONVERSION_FAILED");
-  return {text:item.data,tokens:item.tokens};
+  return { text: item.data, ...(item.tokens !== undefined ? { tokens: item.tokens } : {}) };
 }
 
 export async function embedWithCloudflare(
