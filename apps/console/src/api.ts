@@ -48,6 +48,12 @@ export function overview() { return adminFetch<Record<string,unknown>>("/v1/admi
 export function apps() { return adminFetch<{apps:Array<Record<string,unknown>>}>("/v1/admin/apps"); }
 export function tasks() { return adminFetch<{tasks:Array<Record<string,unknown>>}>("/v1/admin/tasks"); }
 export function providers() { return adminFetch<{providers:Array<Record<string,unknown>>}>("/v1/admin/providers"); }
+export function routes() { return adminFetch<{routes:Array<Record<string,unknown>>}>("/v1/admin/routes"); }
+export function prompts() { return adminFetch<{prompts:Array<Record<string,unknown>>}>("/v1/admin/prompts"); }
+export function knowledge() { return adminFetch<Record<string,unknown>>("/v1/admin/knowledge"); }
+export function evals() { return adminFetch<Record<string,unknown>>("/v1/admin/evals"); }
+export function observability() { return adminFetch<Record<string,unknown>>("/v1/admin/observability"); }
+export function cost() { return adminFetch<Record<string,unknown>>("/v1/admin/cost"); }
 export function policies() { return adminFetch<{policies:Record<string,unknown>}>("/v1/admin/policies"); }
 export function audit() { return adminFetch<{events:Array<Record<string,unknown>>}>("/v1/admin/audit"); }
 
