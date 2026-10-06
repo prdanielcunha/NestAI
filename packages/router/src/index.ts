@@ -1,6 +1,7 @@
 import type { BillingMode, Sensitivity } from "../../contracts/src/index.js";
 import { models, type ModelDescriptor, type ModelId } from "../../model-registry/src/index.js";
 import { providerAllowed } from "../../policy-engine/src/index.js";
+import { getProvider, type ProviderId } from "../../provider-registry/src/index.js";
 
 export type RouteRequest = {
   sensitivity: Sensitivity;
@@ -11,18 +12,15 @@ export type RouteRequest = {
   availableProviders?: string[];
   needsTools?: boolean;
   needsReasoning?: boolean;
+  needsStructuredOutput?: boolean;
+  allowPreviewModels?: boolean;
 };
 
 export type RouteDecision = {
   modelId: ModelId;
-  provider: "groq" | "cloudflare";
+  provider: ProviderId;
   providerModelId: string;
   reason: string[];
-};
-
-const providerMaxSensitivity: Record<"groq" | "cloudflare", Sensitivity> = {
-  groq: "P2_PERSONAL",
-  cloudflare: "P3_SENSITIVE",
 };
 
 const preference: ModelId[] = [
@@ -43,21 +41,24 @@ function supportsModality(model: ModelDescriptor, modality: RouteRequest["modali
 export function routeModel(request: RouteRequest): RouteDecision {
   for (const modelId of preference) {
     const model: ModelDescriptor = models[modelId];
-    if (model.status !== "production") continue;
+    if (model.status !== "production" && !(request.allowPreviewModels && model.status === "preview")) continue;
     if (!request.allowedProviders.includes(model.provider)) continue;
     if (request.availableProviders && !request.availableProviders.includes(model.provider)) continue;
     if (request.blockedProviders.includes(model.provider)) continue;
     if (!supportsModality(model, request.modality)) continue;
     if (request.needsTools && model.tools !== true) continue;
     if (request.needsReasoning && model.reasoning !== true) continue;
+    if (request.needsStructuredOutput && model.structuredOutput !== true) continue;
+    const provider = getProvider(model.provider);
+    if (provider.status === "blocked") continue;
     if (!providerAllowed({
       sensitivity: request.sensitivity,
       billingMode: request.billingMode,
       provider: {
         id: model.provider,
-        freeEligible: model.freeEligible,
+        freeEligible: provider.freeEligible && model.freeEligible,
         paidRequired: model.paidRequired,
-        maxSensitivity: providerMaxSensitivity[model.provider],
+        maxSensitivity: provider.maxSensitivity,
       },
     })) continue;
 
