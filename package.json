@@ -2,14 +2,19 @@
   "name": "nestai",
   "private": true,
   "packageManager": "pnpm@10.17.1",
-  "engines": {"node": ">=20"},
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:security": "vitest run tests/security",
     "build": "tsc -p tsconfig.json --noEmit",
-    "verify:branches": "node scripts/verify-branch-sync.mjs"
+    "verify:branches": "node scripts/verify-branch-sync.mjs",
+    "cf:types": "wrangler types",
+    "deploy": "wrangler deploy",
+    "deploy:dry": "wrangler deploy --dry-run"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
@@ -18,6 +23,7 @@
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.44.1",
     "vitest": "^3.2.4",
-    "zod": "^4.1.11"
+    "zod": "^4.1.11",
+    "wrangler": "^4.44.0"
   }
 }
