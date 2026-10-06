@@ -1,4 +1,4 @@
-import { TaskRequest } from "../../../packages/contracts/src/index.js";
+import { TaskRequest, AudioInput, VisionInput, EmbeddingInput, ImageInput } from "../../../packages/contracts/src/index.js";
 import { verifyNestAiToken, requireCapability, readNestAiTokenHeader, type NestAiClaims } from "../../../packages/auth/src/index.js";
 import { verifyFirebaseAppCheckToken } from "../../../packages/app-check/src/index.js";
 import { classifyPrivacy } from "../../../packages/privacy-firewall/src/index.js";
