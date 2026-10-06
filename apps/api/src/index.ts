@@ -17,9 +17,9 @@ import {
   type GenerateResult,
   type WorkersAiBinding,
 } from "../../../packages/providers/src/index.js";
-import { assertWithinFreeBudget } from "../../../packages/cost-guard/src/index.js";
+import { assertProviderFreeQuota, assertWithinFreeBudget } from "../../../packages/cost-guard/src/index.js";
 import { safeTrace } from "../../../packages/observability/src/index.js";
-import { getUsage, incrementUsage, type D1DatabaseLike } from "../../../packages/usage-ledger/src/index.js";
+import { getUsage, incrementUsage, getDimensionalUsage, incrementDimensionalUsage, type D1DatabaseLike } from "../../../packages/usage-ledger/src/index.js";
 import { buildTaskPrompt } from "../../../packages/prompt-registry/src/index.js";
 import { getStructuredContract, validateStructuredText } from "../../../packages/structured-output/src/index.js";
 import { CircuitBreaker, executeWithSafeFallback } from "../../../packages/resilience/src/index.js";
@@ -208,22 +208,82 @@ async function nextWithDeadline<T>(
   ]);
 }
 
-async function quotaEligibleCandidates(env: Env, organizationId: string, candidates: RouteDecision[]): Promise<RouteDecision[]> {
+async function quotaEligibleCandidates(
+  env: Env,
+  claims: NestAiClaims,
+  task: TaskDefinition,
+  organizationId: string,
+  candidates: RouteDecision[],
+): Promise<RouteDecision[]> {
   const eligible: RouteDecision[] = [];
+
   for (const candidate of candidates) {
-    const usage = await getUsage(env.DB, organizationId, candidate.provider);
     try {
+      const [providerUsage, appUsage, organizationUsage, userUsage] = await Promise.all([
+        getDimensionalUsage(env.DB, {
+          scopeType: "provider",
+          scopeId: candidate.provider,
+          provider: candidate.provider,
+        }),
+        getDimensionalUsage(env.DB, {
+          scopeType: "app",
+          scopeId: task.app,
+          provider: candidate.provider,
+        }),
+        getDimensionalUsage(env.DB, {
+          scopeType: "organization",
+          scopeId: organizationId,
+          provider: candidate.provider,
+        }),
+        getDimensionalUsage(env.DB, {
+          scopeType: "user",
+          scopeId: claims.sub,
+          provider: candidate.provider,
+        }),
+      ]);
+
+      assertProviderFreeQuota(candidate.provider, providerUsage.provider_calls, task.priority);
       assertWithinFreeBudget(
-        { requestsToday: usage.requests, providerCallsToday: usage.provider_calls },
-        { maxRequestsPerDay: 900, maxProviderCallsPerDay: 900 },
+        { requestsToday: appUsage.requests, providerCallsToday: appUsage.provider_calls },
+        { maxRequestsPerDay: 700, maxProviderCallsPerDay: 700 },
       );
+      assertWithinFreeBudget(
+        { requestsToday: organizationUsage.requests, providerCallsToday: organizationUsage.provider_calls },
+        { maxRequestsPerDay: 300, maxProviderCallsPerDay: 300 },
+      );
+      assertWithinFreeBudget(
+        { requestsToday: userUsage.requests, providerCallsToday: userUsage.provider_calls },
+        { maxRequestsPerDay: 100, maxProviderCallsPerDay: 100 },
+      );
+
       eligible.push(candidate);
     } catch {
       continue;
     }
   }
+
   if (eligible.length === 0) throw new Error("COST_GUARD_PROVIDER_LIMIT");
   return eligible;
+}
+
+async function recordProviderAttempt(
+  env: Env,
+  claims: NestAiClaims,
+  task: TaskDefinition,
+  organizationId: string,
+  provider: string,
+): Promise<void> {
+  await Promise.all([
+    incrementUsage(env.DB, organizationId, provider),
+    incrementDimensionalUsage(env.DB, [
+      { scopeType: "provider", scopeId: provider, provider },
+      { scopeType: "app", scopeId: task.app, provider },
+      { scopeType: "organization", scopeId: organizationId, provider },
+      { scopeType: "user", scopeId: claims.sub, provider },
+      { scopeType: "app", scopeId: task.app, provider, task: task.id },
+      { scopeType: "organization", scopeId: organizationId, provider, task: task.id },
+    ]),
+  ]);
 }
 
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
@@ -278,7 +338,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       });
       if (candidates.length === 0) throw new Error("ROUTER_NO_ELIGIBLE_MODEL");
 
-      const quotaCandidates = await quotaEligibleCandidates(env, organizationId, candidates);
+      const quotaCandidates = await quotaEligibleCandidates(env, claims, task, organizationId, candidates);
       const locale = (parsed.context.locale ?? claims.locale ?? "pt-BR") as Locale;
       const prompt = buildTaskPrompt({ taskId: task.id, locale, input: parsed.input });
 
@@ -288,7 +348,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         breaker,
         maxRetriesPerCandidate: 1,
         execute: async ({ candidate }) => {
-          await incrementUsage(env.DB, organizationId, candidate.provider);
+          await recordProviderAttempt(env, claims, task, organizationId, candidate.provider);
           return withTimeout(
             (signal) => streamForRoute(env, {
               route: candidate,
@@ -429,7 +489,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       breaker,
       maxRetriesPerCandidate: 1,
       execute: async ({ candidate }) => {
-        await incrementUsage(env.DB, organizationId, candidate.provider);
+        await recordProviderAttempt(env, claims, task, organizationId, candidate.provider);
         return withTimeout(
           (signal) => generateForRoute(env, {
             route: candidate,
