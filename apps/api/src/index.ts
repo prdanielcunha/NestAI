@@ -1,5 +1,5 @@
 import { TaskRequest } from "../../../packages/contracts/src/index.js";
-import { verifyNestAiToken, requireCapability } from "../../../packages/auth/src/index.js";
+import { verifyNestAiToken, requireCapability, readNestAiTokenHeader } from "../../../packages/auth/src/index.js";
 import { classifyPrivacy } from "../../../packages/privacy-firewall/src/index.js";
 import { getTask } from "../../../packages/task-registry/src/index.js";
 import { routeModel } from "../../../packages/router/src/index.js";
@@ -15,7 +15,7 @@ export type Env = {
   AI_RATE_LIMITER: RateLimiter;
   DB: D1DatabaseLike;
   GROQ_API_KEY?: string;
-  HUB_TOKEN_PUBLIC_JWK: string;
+  HUB_JWKS_URL: string;
   HUB_TOKEN_ISSUER: string;
   NESTAI_TOKEN_AUDIENCE: string;
   AI_BILLING_MODE: "FREE_ONLY";
@@ -38,6 +38,27 @@ function statusFor(code: string): number {
   if (code.startsWith("COST_GUARD_") || code === "RATE_LIMITED") return 429;
   if (code.startsWith("PRIVACY_") || code === "ROUTER_NO_ELIGIBLE_MODEL") return 422;
   return 500;
+}
+
+type JwksKey = JsonWebKey & { kid?: string; alg?: string; use?: string };
+let jwksCache: { expiresAt: number; keys: JwksKey[] } | null = null;
+
+async function resolveHubPublicJwk(token: string, env: Env): Promise<JsonWebKey> {
+  const header = readNestAiTokenHeader(token);
+  const now = Date.now();
+  if (!jwksCache || jwksCache.expiresAt <= now) {
+    const response = await fetch(env.HUB_JWKS_URL, { headers: { accept: "application/json" } });
+    if (!response.ok) throw new Error("AUTH_JWKS_UNAVAILABLE");
+    const body = await response.json() as { keys?: JwksKey[] };
+    if (!Array.isArray(body.keys) || body.keys.length === 0) throw new Error("AUTH_JWKS_EMPTY");
+    jwksCache = { keys: body.keys, expiresAt: now + 300_000 };
+  }
+  const key = header.kid
+    ? jwksCache.keys.find((candidate) => candidate.kid === header.kid)
+    : jwksCache.keys.length === 1 ? jwksCache.keys[0] : undefined;
+  if (!key) throw new Error("AUTH_KEY_NOT_FOUND");
+  if (key.kty !== "EC" || key.crv !== "P-256") throw new Error("AUTH_KEY_UNSUPPORTED");
+  return key;
 }
 
 function promptFrom(input: unknown): string {
@@ -65,10 +86,12 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     const organizationId = parsed.context.organizationId;
     if (!organizationId) throw new Error("AUTH_TENANT_REQUIRED");
 
-    const claims = await verifyNestAiToken(authorization.slice(7), {
+    const token = authorization.slice(7);
+    const publicJwk = await resolveHubPublicJwk(token, env);
+    const claims = await verifyNestAiToken(token, {
       issuer: env.HUB_TOKEN_ISSUER,
       audience: env.NESTAI_TOKEN_AUDIENCE,
-      publicJwk: JSON.parse(env.HUB_TOKEN_PUBLIC_JWK) as JsonWebKey,
+      publicJwk,
       expectedOrganizationId: organizationId,
       expectedAppId: task.app,
     });
