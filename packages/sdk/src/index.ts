@@ -31,6 +31,27 @@ export type RunTaskResponse<TResult = unknown> = {
   };
 };
 
+
+export type JobCreateResponse = {
+  requestId: string;
+  jobId: string;
+  status: "queued";
+  statusUrl: string;
+};
+
+export type JobStatusResponse<TResult = unknown> = {
+  requestId: string;
+  job: {
+    id: string;
+    task: string;
+    status: "queued" | "running" | "succeeded" | "failed" | "dead_lettered";
+    attempt: number;
+    createdAt: string;
+    updatedAt: string;
+    result?: TResult;
+  };
+};
+
 export type StreamEvent =
   | { event: "start"; data: { requestId: string; task: string; version: number } }
   | { event: "delta"; data: { text: string } }
@@ -131,8 +152,11 @@ export class NestAiClient {
     });
   }
 
-  async run<TResult = unknown>(request: RunTaskRequest): Promise<RunTaskResponse<TResult>> {
-    const response = await this.fetcher(new URL("run", this.baseUrl), {
+  private async postTask<TResult>(
+    endpoint: string,
+    request: RunTaskRequest,
+  ): Promise<RunTaskResponse<TResult>> {
+    const response = await this.fetcher(new URL(endpoint, this.baseUrl), {
       method: "POST",
       headers: await this.headers(request.requestId),
       body: this.body(request),
@@ -140,6 +164,10 @@ export class NestAiClient {
     const body = await response.json() as RunTaskResponse<TResult> & { error?: string; requestId?: string };
     if (!response.ok) throw new NestAiError(body.error ?? "NESTAI_HTTP_" + response.status, response.status, body.requestId);
     return body;
+  }
+
+  async run<TResult = unknown>(request: RunTaskRequest): Promise<RunTaskResponse<TResult>> {
+    return this.postTask<TResult>("run", request);
   }
 
   async *stream(request: RunTaskRequest): AsyncGenerator<StreamEvent> {
@@ -185,11 +213,41 @@ export class NestAiClient {
   }
 
   async vision<TResult = unknown>(task: string, input: unknown): Promise<RunTaskResponse<TResult>> {
-    return this.run<TResult>({ task, input });
+    return this.postTask<TResult>("vision", { task, input });
   }
 
   async transcribe<TResult = unknown>(task: string, input: unknown): Promise<RunTaskResponse<TResult>> {
-    return this.run<TResult>({ task, input });
+    return this.postTask<TResult>("transcribe", { task, input });
+  }
+
+  async embeddings<TResult = unknown>(task: string, input: unknown): Promise<RunTaskResponse<TResult>> {
+    return this.postTask<TResult>("embeddings", { task, input });
+  }
+
+  async image<TResult = unknown>(task: string, input: unknown): Promise<RunTaskResponse<TResult>> {
+    return this.postTask<TResult>("image", { task, input });
+  }
+
+  async createJob(task: string, input: unknown, requestId?: string): Promise<JobCreateResponse> {
+    const response = await this.fetcher(new URL("jobs", this.baseUrl), {
+      method: "POST",
+      headers: await this.headers(requestId),
+      body: this.body({ task, input, ...(requestId ? { requestId } : {}) }),
+    });
+    const body = await response.json() as JobCreateResponse & { error?: string; requestId?: string };
+    if (!response.ok) throw new NestAiError(body.error ?? "NESTAI_HTTP_" + response.status, response.status, body.requestId);
+    return body;
+  }
+
+  async getJob<TResult = unknown>(jobId: string): Promise<JobStatusResponse<TResult>> {
+    const headers = await this.headers();
+    headers["x-millionsnest-org"] = this.options.organizationId;
+    const response = await this.fetcher(new URL("jobs/" + encodeURIComponent(jobId), this.baseUrl), {
+      headers,
+    });
+    const body = await response.json() as JobStatusResponse<TResult> & { error?: string; requestId?: string };
+    if (!response.ok) throw new NestAiError(body.error ?? "NESTAI_HTTP_" + response.status, response.status, body.requestId);
+    return body;
   }
 
   async getAccessToken(): Promise<string> {
