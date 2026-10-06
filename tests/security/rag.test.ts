@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterTenantDocuments } from "../../packages/rag/src/index.js";
+import { filterTenantDocuments, queryKnowledge, upsertKnowledge } from "../../packages/rag/src/index.js";
 
 describe("RAG tenant firewall", () => {
   const docs = [
@@ -17,5 +17,45 @@ describe("RAG tenant firewall", () => {
       query: "anything",
     });
     expect(result.map((item) => item.id)).toEqual(["a"]);
+  });
+});
+
+
+describe("Vectorize RAG defense in depth", () => {
+  it("re-checks tenant/app/locale after Vectorize returns matches", async () => {
+    const vectorize = {
+      upsert: async () => ({}),
+      query: async () => ({
+        matches: [
+          { id: "good:0", score: 0.95, metadata: { sourceId: "good", appId: "nestlume", organizationHash: await import("../../packages/rag/src/index.js").then((m) => m.ragOrganizationHash("org-1")), sensitivity: "P1_INTERNAL", locale: "pt-BR", text: "ok" } },
+          { id: "bad:0", score: 0.99, metadata: { sourceId: "bad", appId: "nestlume", organizationHash: "foreign", sensitivity: "P1_INTERNAL", locale: "pt-BR", text: "leak" } },
+        ],
+      }),
+    };
+    const result = await queryKnowledge({
+      vectorize,
+      appId: "nestlume",
+      organizationId: "org-1",
+      maxSensitivity: "P1_INTERNAL",
+      locale: "pt-BR",
+      queryVector: [0.1, 0.2],
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]?.text).toBe("ok");
+  });
+
+  it("refuses P4 ingestion before embedding", async () => {
+    let embedded = false;
+    await expect(upsertKnowledge({
+      vectorize: { upsert: async () => ({}), query: async () => ({ matches: [] }) },
+      sourceId: "restricted",
+      appId: "nestlume",
+      organizationId: "org-1",
+      sensitivity: "P4_RESTRICTED",
+      locale: "pt-BR",
+      text: "restricted",
+      embed: async () => { embedded = true; return [[0.1]]; },
+    })).rejects.toThrow("RAG_RESTRICTED_DATA_DENIED");
+    expect(embedded).toBe(false);
   });
 });
