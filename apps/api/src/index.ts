@@ -70,6 +70,7 @@ export type Env = {
   AI_MUSICSCALE_ENABLED?: "true" | "false";
   AI_HUB_ENABLED?: "true" | "false";
   AI_JOBS_ENABLED?: "true" | "false";
+  AI_CACHE_ENABLED?: "true" | "false";
   AI_VECTORIZE_ENABLED?: "true" | "false";
   AI_R2_WRITES_ENABLED?: "true" | "false";
 };
@@ -734,9 +735,11 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         auth: "ready",
         config: "ready",
         d1,
-        kv: "unconfigured",
-        queue: "unconfigured",
-        vectorize: "unconfigured",
+        kv: env.CACHE && env.AI_CACHE_ENABLED === "true" ? "ready" : "unconfigured",
+        queue: env.JOBS && env.AI_JOBS_ENABLED === "true" ? "ready" : "unconfigured",
+        vectorize: env.VECTORIZE && env.AI_VECTORIZE_ENABLED === "true"
+          ? "ready"
+          : env.AI_VECTORIZE_ENABLED === "false" ? "blocked" : "unconfigured",
       },
       providers,
     });
