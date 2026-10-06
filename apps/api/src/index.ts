@@ -24,7 +24,7 @@ import { buildTaskPrompt } from "../../../packages/prompt-registry/src/index.js"
 import { getStructuredContract, validateStructuredText } from "../../../packages/structured-output/src/index.js";
 import { CircuitBreaker, executeWithSafeFallback } from "../../../packages/resilience/src/index.js";
 import type { Locale } from "../../../packages/i18n/src/index.js";
-import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit } from "../../../packages/control-plane/src/index.js";
+import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit, controlPlaneRoutes, controlPlanePrompts, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota } from "../../../packages/control-plane/src/index.js";
 
 type RateLimiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
 
@@ -367,6 +367,12 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       if (url.pathname === "/v1/admin/apps") return json({ apps: controlPlaneApps() });
       if (url.pathname === "/v1/admin/tasks") return json({ tasks: controlPlaneTasks() });
       if (url.pathname === "/v1/admin/providers") return json({ providers: controlPlaneProviders() });
+      if (url.pathname === "/v1/admin/routes") return json({ routes: controlPlaneRoutes() });
+      if (url.pathname === "/v1/admin/prompts") return json({ prompts: controlPlanePrompts() });
+      if (url.pathname === "/v1/admin/knowledge") return json(await controlPlaneKnowledge(env.DB));
+      if (url.pathname === "/v1/admin/evals") return json(await controlPlaneEvaluations(env.DB));
+      if (url.pathname === "/v1/admin/observability") return json(await controlPlaneObservability(env.DB));
+      if (url.pathname === "/v1/admin/cost") return json(await controlPlaneCostQuota(env.DB));
       if (url.pathname === "/v1/admin/policies") return json({ policies: controlPlanePolicies() });
       if (url.pathname === "/v1/admin/audit") return json({ events: await controlPlaneAudit(env.DB, Number(url.searchParams.get("limit") ?? 100)) });
       return json({ error: "NOT_FOUND" }, 404);
