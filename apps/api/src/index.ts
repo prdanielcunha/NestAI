@@ -24,6 +24,7 @@ import { buildTaskPrompt } from "../../../packages/prompt-registry/src/index.js"
 import { getStructuredContract, validateStructuredText } from "../../../packages/structured-output/src/index.js";
 import { CircuitBreaker, executeWithSafeFallback } from "../../../packages/resilience/src/index.js";
 import type { Locale } from "../../../packages/i18n/src/index.js";
+import { cacheGet, cachePut, type KvNamespaceLike } from "../../../packages/cache/src/index.js";
 import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit, controlPlaneRoutes, controlPlanePrompts, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota } from "../../../packages/control-plane/src/index.js";
 import { validateAppManifest, assertManifestTaskOwnership, persistAppManifest } from "../../../packages/app-manifest/src/index.js";
 import { verifyGitHubWorkloadToken } from "../../../packages/workload-auth/src/index.js";
@@ -34,6 +35,7 @@ export type Env = {
   AI: WorkersAiBinding;
   AI_RATE_LIMITER: RateLimiter;
   DB: D1DatabaseLike;
+  CACHE?: KvNamespaceLike;
   GROQ_API_KEY?: string;
   GEMINI_API_KEY?: string;
   MISTRAL_API_KEY?: string;
@@ -589,6 +591,45 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     }
 
     const structuredContract = getStructuredContract(task.id);
+    const locale = (parsed.context.locale ?? claims.locale ?? "pt-BR") as Locale;
+    const prompt = buildTaskPrompt({ taskId: task.id, locale, input: parsed.input });
+    const cacheContext = {
+      taskId: task.id,
+      taskVersion: task.version,
+      promptVersion: prompt.promptVersion,
+      policyVersion: 1,
+      locale,
+      organizationId,
+      sensitivity: privacy.sensitivity,
+      input: parsed.input,
+    };
+    const cachedResult = await cacheGet<unknown>(env.CACHE, cacheContext, task.cache.mode);
+    if (cachedResult !== null) {
+      const trace = await safeTrace({
+        traceId: requestId,
+        task: task.id,
+        appId: task.app,
+        organizationId,
+        sensitivity: privacy.sensitivity,
+        promptVersion: prompt.promptVersion,
+        durationMs: Date.now() - started,
+        fallbackUsed: false,
+        retries: 0,
+        cached: true,
+        outputValidation: structuredContract ? "passed" : "not_required",
+        toolUsage: false,
+        outcome: "success",
+      });
+      console.log(JSON.stringify(trace));
+      return json({
+        requestId,
+        task: task.id,
+        version: task.version,
+        result: cachedResult,
+        meta: { providerClass: "free", cached: true, fallbackUsed: false, retries: 0 },
+      });
+    }
+
     const candidates = routeCandidates({
       sensitivity: privacy.sensitivity,
       billingMode: env.AI_BILLING_MODE,
@@ -601,8 +642,6 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     if (candidates.length === 0) throw new Error("ROUTER_NO_ELIGIBLE_MODEL");
 
     const quotaCandidates = await quotaEligibleCandidates(env, claims, task, organizationId, candidates);
-    const locale = (parsed.context.locale ?? claims.locale ?? "pt-BR") as Locale;
-    const prompt = buildTaskPrompt({ taskId: task.id, locale, input: parsed.input });
 
     const execution = await executeWithSafeFallback({
       candidates: quotaCandidates,
@@ -632,6 +671,8 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       outputValidation = "failed";
       throw error;
     }
+
+    await cachePut(env.CACHE, cacheContext, task.cache.mode, task.cache.ttlSeconds, result);
 
     const trace = await safeTrace({
       traceId: requestId,
