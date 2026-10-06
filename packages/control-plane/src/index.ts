@@ -209,3 +209,88 @@ export async function controlPlaneCostQuota(db: D1DatabaseLike, now = new Date()
     usage: rows.results ?? [],
   };
 }
+
+
+export async function syncStaticControlPlane(
+  db:D1DatabaseLike,
+  now=new Date(),
+):Promise<{apps:number;tasks:number;providers:number;models:number;routes:number;prompts:number}>{
+  const timestamp=now.toISOString();
+
+  for(const app of ecosystemApps){
+    await db.prepare(
+      "INSERT INTO cp_apps(app_id,display_name,default_locale,enabled,manifest_version,updated_at) VALUES (?1,?2,?3,?4,1,?5) " +
+      "ON CONFLICT(app_id) DO UPDATE SET display_name=excluded.display_name,default_locale=excluded.default_locale,enabled=excluded.enabled,updated_at=excluded.updated_at"
+    ).bind(app.appId,app.displayName,app.defaultLocale,app.enabled?1:0,timestamp).run();
+  }
+
+  for(const task of tasks){
+    await db.prepare(
+      "INSERT INTO cp_tasks(task_id,app_id,current_version,modality,sensitivity,streaming,status,updated_at) VALUES (?1,?2,?3,?4,?5,?6,'production',?7) " +
+      "ON CONFLICT(task_id) DO UPDATE SET app_id=excluded.app_id,current_version=excluded.current_version,modality=excluded.modality,sensitivity=excluded.sensitivity,streaming=excluded.streaming,status='production',updated_at=excluded.updated_at"
+    ).bind(task.id,task.app,task.version,task.modality,task.defaultSensitivity,task.streaming?1:0,timestamp).run();
+    await db.prepare(
+      "INSERT OR IGNORE INTO cp_task_versions(task_id,version,config_json,created_at) VALUES (?1,?2,?3,?4)"
+    ).bind(task.id,task.version,JSON.stringify(task),timestamp).run();
+  }
+
+  for(const provider of Object.values(providers)){
+    await db.prepare(
+      "INSERT INTO cp_providers(provider_id,status,free_eligible,max_sensitivity,terms_reviewed_at,metadata_json,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7) " +
+      "ON CONFLICT(provider_id) DO UPDATE SET status=excluded.status,free_eligible=excluded.free_eligible,max_sensitivity=excluded.max_sensitivity,terms_reviewed_at=excluded.terms_reviewed_at,metadata_json=excluded.metadata_json,updated_at=excluded.updated_at"
+    ).bind(provider.id,provider.status,provider.freeEligible?1:0,provider.maxSensitivity,provider.termsReviewedAt,JSON.stringify(provider),timestamp).run();
+  }
+
+  for(const [modelId,model] of Object.entries(models)){
+    await db.prepare(
+      "INSERT INTO cp_models(model_id,provider_id,provider_model_id,status,free_eligible,paid_required,metadata_json,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8) " +
+      "ON CONFLICT(model_id) DO UPDATE SET provider_id=excluded.provider_id,provider_model_id=excluded.provider_model_id,status=excluded.status,free_eligible=excluded.free_eligible,paid_required=excluded.paid_required,metadata_json=excluded.metadata_json,updated_at=excluded.updated_at"
+    ).bind(modelId,model.provider,model.providerModelId,model.status,model.freeEligible?1:0,model.paidRequired?1:0,JSON.stringify(model),timestamp).run();
+  }
+
+  const routes=controlPlaneRoutes();
+  for(const route of routes){
+    await db.prepare(
+      "INSERT INTO cp_routes(route_id,task_id,current_version,status,updated_at) VALUES (?1,?2,?3,'production',?4) " +
+      "ON CONFLICT(route_id) DO UPDATE SET task_id=excluded.task_id,current_version=excluded.current_version,status='production',updated_at=excluded.updated_at"
+    ).bind(route.id,route.task,route.version,timestamp).run();
+    await db.prepare(
+      "INSERT OR IGNORE INTO cp_route_versions(route_id,version,config_json,created_at) VALUES (?1,?2,?3,?4)"
+    ).bind(route.id,route.version,JSON.stringify(route),timestamp).run();
+  }
+
+  for(const prompt of Object.values(prompts)){
+    await db.prepare(
+      "INSERT INTO cp_prompts(prompt_id,task_id,current_version,status,updated_at) VALUES (?1,?2,?3,'production',?4) " +
+      "ON CONFLICT(prompt_id) DO UPDATE SET task_id=excluded.task_id,current_version=excluded.current_version,status='production',updated_at=excluded.updated_at"
+    ).bind(prompt.id,prompt.taskId,prompt.version,timestamp).run();
+    await db.prepare(
+      "INSERT OR IGNORE INTO cp_prompt_versions(prompt_id,version,content_json,created_at) VALUES (?1,?2,?3,?4)"
+    ).bind(prompt.id,prompt.version,JSON.stringify(prompt),timestamp).run();
+  }
+
+  const policy=controlPlanePolicies();
+  await db.prepare(
+    "INSERT INTO cp_policies(policy_id,current_version,status,updated_at) VALUES ('core',1,'production',?1) " +
+    "ON CONFLICT(policy_id) DO UPDATE SET current_version=1,status='production',updated_at=excluded.updated_at"
+  ).bind(timestamp).run();
+  await db.prepare(
+    "INSERT OR IGNORE INTO cp_policy_versions(policy_id,version,config_json,created_at) VALUES ('core',1,?1,?2)"
+  ).bind(JSON.stringify(policy),timestamp).run();
+
+  for(const [providerId,quota] of Object.entries(providerFreeQuota)){
+    await db.prepare(
+      "INSERT INTO cp_quotas(quota_id,scope_type,scope_id,provider,config_json,updated_at) VALUES (?1,'provider',?2,?2,?3,?4) " +
+      "ON CONFLICT(quota_id) DO UPDATE SET config_json=excluded.config_json,updated_at=excluded.updated_at"
+    ).bind("provider:"+providerId,providerId,JSON.stringify(quota),timestamp).run();
+  }
+
+  return {
+    apps:ecosystemApps.length,
+    tasks:tasks.length,
+    providers:Object.keys(providers).length,
+    models:Object.keys(models).length,
+    routes:routes.length,
+    prompts:Object.keys(prompts).length,
+  };
+}
