@@ -63,22 +63,39 @@ config.queues={
   }]
 };
 
-let indexes=listArray(json(["vectorize","list","--json"]));
-if(!indexes.some((x)=>x.name==="nestai-knowledge")){
-  wrangler(["vectorize","create","nestai-knowledge","--dimensions=768","--metric=cosine","--json"]);
-  indexes=listArray(json(["vectorize","list","--json"]));
+let vectorizeReady=false;
+try {
+  let indexes=listArray(json(["vectorize","list","--json"]));
+  if(!indexes.some((x)=>x.name==="nestai-knowledge")){
+    wrangler(["vectorize","create","nestai-knowledge","--dimensions=768","--metric=cosine","--json"]);
+    indexes=listArray(json(["vectorize","list","--json"]));
+  }
+  if(indexes.some((x)=>x.name==="nestai-knowledge")){
+    config.vectorize=[{binding:"VECTORIZE",index_name:"nestai-knowledge"}];
+    vectorizeReady=true;
+  }
+} catch (error) {
+  const detail=String(error?.stderr??error?.message??error);
+  console.warn("NESTAI_VECTORIZE_BLOCKED="+detail.split("\n")[0]);
+  delete config.vectorize;
 }
-if(!indexes.some((x)=>x.name==="nestai-knowledge")) throw new Error("NESTAI_VECTORIZE_NOT_FOUND");
-config.vectorize=[{binding:"VECTORIZE",index_name:"nestai-knowledge"}];
 
-createIfMissing(["r2","bucket","create","nestai-knowledge"],"R2_NESTAI_KNOWLEDGE");
-config.r2_buckets=[{binding:"KNOWLEDGE_BUCKET",bucket_name:"nestai-knowledge"}];
+let r2Ready=false;
+try {
+  createIfMissing(["r2","bucket","create","nestai-knowledge"],"R2_NESTAI_KNOWLEDGE");
+  config.r2_buckets=[{binding:"KNOWLEDGE_BUCKET",bucket_name:"nestai-knowledge"}];
+  r2Ready=true;
+} catch (error) {
+  const detail=String(error?.stderr??error?.message??error);
+  console.warn("NESTAI_R2_BLOCKED="+detail.split("\n")[0]);
+  delete config.r2_buckets;
+}
 
 config.vars={
   ...config.vars,
   AI_CACHE_ENABLED:"true",
   AI_JOBS_ENABLED:"true",
-  AI_VECTORIZE_ENABLED:"true",
+  AI_VECTORIZE_ENABLED:vectorizeReady?"true":"false",
   AI_R2_WRITES_ENABLED:"false"
 };
 
@@ -86,6 +103,6 @@ writeFileSync(configPath,JSON.stringify(config,null,2)+"\n");
 console.log(JSON.stringify({
   kv:"ready",
   queues:"ready",
-  vectorize:"ready",
-  r2:"provisioned_write_locked",
+  vectorize:vectorizeReady?"ready":"blocked_permission",
+  r2:r2Ready?"provisioned_write_locked":"blocked_permission",
 }));
