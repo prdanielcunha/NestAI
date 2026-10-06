@@ -1,6 +1,6 @@
 # NestAI — MillionsNest Intelligence Platform
 
-**Current Architecture Version:** 1.2-core-runtime  
+**Current Architecture Version:** 1.3-control-plane-foundation  
 **Last Updated:** 2026-10-06  
 **Production SHA:** NOT DEPLOYED  
 **Main SHA:** see Git history (updated automatically after release tooling lands)  
@@ -27,13 +27,17 @@
 - D1 daily usage ledger and migration for provider quotas.
 - Metadata-only hashed observability traces.
 - Thin ecosystem SDK.
+- Tenant-scoped RAG primitives and bounded async job envelopes.
+- Evaluation release gate and controlled app manifests.
+- Deny-by-default tool execution policy.
+- PT-BR/en/es locale foundation and Mission Control data/UX contracts.
 - CI quality/security gates plus Wrangler deployment dry-run.
 - Gated production deployment workflow and branch-sync verifier.
 - Architecture/security/privacy/provider/task/RAG/runbook/release documentation.
 
 ## Not yet production claims
 
-Worker runtime, auth, routing, provider adapters, D1 ledger and SDK are implemented but **not yet live-deployed**. A real Cloudflare D1 database ID, Worker secrets, Cloudflare deployment credentials, migrations, custom domain, App Check, RAG/Vectorize/R2/Queues, console, SDK publication and live provider smoke tests remain unverified. The placeholder D1 UUID in `wrangler.jsonc` must never be represented as provisioned.
+Worker runtime, auth, routing, provider adapters, D1 ledger and SDK are implemented but **not yet live-deployed**. A real Cloudflare D1 database ID, Worker secrets, Cloudflare deployment credentials, migrations, custom domain, App Check, Vectorize/R2/Queues concrete account bindings, rendered Mission Control UI, SDK publication and live provider smoke tests remain unverified. The placeholder D1 UUID in `wrangler.jsonc` must never be represented as provisioned.
 
 ## Canonical invariants
 
@@ -89,6 +93,12 @@ Groq GPT-OSS 120B/20B remain Production models and Free Plan limits were reconfi
 - **Impact:** model/provider registry and privacy policy.
 - **Migration:** none.
 - **Production:** not deployed.
+
+### 2026-10-06 — Architecture 1.3 control-plane foundation
+- **Decision:** add tenant-safe RAG/job primitives, eval gates, app manifests, i18n and tool policy before app rollout.
+- **Reason:** prevent later integrations from bypassing central policy.
+- **Impact:** RAG filtering, bounded retries, app registry, eval release gate, write-tool denial and Mission Control contracts.
+- **Production:** not deployed; Cloudflare account resources remain the release blocker.
 
 ## Implementation phases
 
