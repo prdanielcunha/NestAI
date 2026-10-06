@@ -13,8 +13,12 @@ export function validateManifest(manifest: AppManifest): void {
 }
 
 export const ecosystemApps: AppManifest[] = [
-  { appId: "connect", displayName: "MillionsNest Connect", allowedTasks: ["connect.reply.suggest"], defaultLocale: "pt-BR", enabled: true },
-  { appId: "nestfinance", displayName: "NestFinance", allowedTasks: ["finance.receipt.extract"], defaultLocale: "pt-BR", enabled: true },
-  { appId: "nestlume", displayName: "NestLume", allowedTasks: ["nestlume.study.answer"], defaultLocale: "pt-BR", enabled: true },
-  { appId: "nestaffiliate", displayName: "NestAffiliate", allowedTasks: ["affiliate.pin.copy"], defaultLocale: "pt-BR", enabled: true },
+  { appId: "millionsnest", displayName: "MillionsNest Hub", allowedTasks: ["hub.operational.summary","hub.incident.explain"], defaultLocale: "pt-BR", enabled: true },
+  { appId: "connect", displayName: "MillionsNest Connect", allowedTasks: ["connect.message.classify","connect.reply.suggest","connect.audio.transcribe"], defaultLocale: "pt-BR", enabled: true },
+  { appId: "nestlocal", displayName: "NestLocal", allowedTasks: ["nestlocal.request.extract","nestlocal.quote.compose","nestlocal.followup.compose"], defaultLocale: "pt-BR", enabled: true },
+  { appId: "nestjourney", displayName: "NestJourney", allowedTasks: ["journey.form.extract","journey.followup.summarize"], defaultLocale: "pt-BR", enabled: true },
+  { appId: "nestfinance", displayName: "NestFinance", allowedTasks: ["finance.receipt.extract","finance.report.explain"], defaultLocale: "pt-BR", enabled: true },
+  { appId: "musicscale", displayName: "MusicScale", allowedTasks: ["musicscale.song.structure","musicscale.team.message.compose"], defaultLocale: "pt-BR", enabled: true },
+  { appId: "nestlume", displayName: "NestLume", allowedTasks: ["nestlume.study.answer","nestlume.entity.explain","nestlume.embedding.generate"], defaultLocale: "pt-BR", enabled: true },
+  { appId: "nestaffiliate", displayName: "NestAffiliate", allowedTasks: ["affiliate.product.analyze","affiliate.pin.copy","affiliate.creative.generate"], defaultLocale: "pt-BR", enabled: true },
 ];
