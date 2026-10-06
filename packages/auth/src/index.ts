@@ -9,7 +9,7 @@ export type NestAiClaims = {
   entitlements?: string[];
   locale?: "pt-BR" | "en" | "es";
   session?: string;
-  tokenType?: "user" | "service";
+  tokenType?: "user" | "guest" | "service";
   appCheckAppId?: string;
   iat: number;
   exp: number;
