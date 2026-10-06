@@ -52,7 +52,7 @@ async function issueWorkerToken() {
     sub: "user-1",
     organizationId: "org-1",
     appId: "nestlume",
-    capabilities: ["ai:run"],
+    capabilities: ["ai:run", "ai:stream"],
     iat: now,
     exp: now + 300,
   });
@@ -132,6 +132,56 @@ describe("Worker API", () => {
     expect(body.meta.providerClass).toBe("free");
     expect(body.meta.fallbackUsed).toBe(false);
     expect(fetchMock).toHaveBeenCalledOnce();
+    fetchMock.mockRestore();
+  });
+
+
+  it("streams canonical SSE without exposing provider model metadata", async () => {
+    const { token, publicJwk } = await issueWorkerToken();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
+      keys: [publicJwk],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+
+    const env = baseEnv();
+    const encoder = new TextEncoder();
+    env.AI = {
+      run: vi.fn(async (_model: string, input: unknown) => {
+        if ((input as { stream?: boolean }).stream) {
+          return new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(encoder.encode('data: {"response":"Olá"}\n\n'));
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+              controller.close();
+            },
+          });
+        }
+        return { response: "ok" };
+      }),
+    };
+
+    const response = await handleRequest(new Request("https://ai.millionsnest.com/v1/chat/stream", {
+      method: "POST",
+      headers: {
+        authorization: \`Bearer \${token}\`,
+        "content-type": "application/json",
+        "x-millionsnest-app": "nestlume",
+        accept: "text/event-stream",
+      },
+      body: JSON.stringify({
+        task: "nestlume.study.answer",
+        input: "Explique Provérbios 2.",
+        context: { organizationId: "org-1", locale: "pt-BR" },
+      }),
+    }), env);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    const text = await response.text();
+    expect(text).toContain("event: start");
+    expect(text).toContain('event: delta');
+    expect(text).toContain('"text":"Olá"');
+    expect(text).toContain("event: complete");
+    expect(text).not.toContain("@cf/");
     fetchMock.mockRestore();
   });
 
