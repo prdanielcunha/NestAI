@@ -25,6 +25,8 @@ import { getStructuredContract, validateStructuredText } from "../../../packages
 import { CircuitBreaker, executeWithSafeFallback } from "../../../packages/resilience/src/index.js";
 import type { Locale } from "../../../packages/i18n/src/index.js";
 import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit, controlPlaneRoutes, controlPlanePrompts, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota } from "../../../packages/control-plane/src/index.js";
+import { validateAppManifest, assertManifestTaskOwnership, persistAppManifest } from "../../../packages/app-manifest/src/index.js";
+import { verifyGitHubWorkloadToken } from "../../../packages/workload-auth/src/index.js";
 
 type RateLimiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
 
@@ -358,6 +360,35 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       },
       providers,
     });
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/apps/register") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    try {
+      const authorization = request.headers.get("authorization");
+      if (!authorization?.startsWith("Bearer ")) throw new Error("WORKLOAD_AUTH_MISSING");
+      const raw = await request.json();
+      const manifest = validateAppManifest(raw);
+      assertManifestTaskOwnership(manifest);
+      const claims = await verifyGitHubWorkloadToken(authorization.slice(7), {
+        audience: "nestai-app-register",
+        repositoryOwner: "prdanielcunha",
+        expectedRepository: manifest.owner.repository,
+      });
+      await persistAppManifest(env.DB, manifest, { ref: claims.ref, sha: claims.sha });
+      return json({
+        requestId,
+        registered: true,
+        appId: manifest.appId,
+        manifestVersion: manifest.schemaVersion,
+        repository: manifest.owner.repository,
+        tasks: manifest.ai.tasks,
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      const status = code.startsWith("WORKLOAD_") ? 401 : code.startsWith("APP_MANIFEST_") ? 422 : 400;
+      return json({ requestId, error: code }, status);
+    }
   }
 
   if (request.method === "GET" && url.pathname.startsWith("/v1/admin/")) {
