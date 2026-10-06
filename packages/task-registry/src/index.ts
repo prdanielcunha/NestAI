@@ -14,11 +14,12 @@ export type TaskDefinition = {
   timeoutMs: number;
   priority: "background" | "interactive" | "critical";
   cache: { mode: "disabled" | "tenant"; ttlSeconds: number };
+  rag?: boolean;
 };
 
 export const tasks: TaskDefinition[] = [
   { id: "hub.operational.summary", version: 1, app: "millionsnest", modality: "text", defaultSensitivity: "P1_INTERNAL", allowedProviders: ["groq","cloudflare"], blockedProviders: ["gemini","mistral"], streaming: false, capability: "ai:run", maxOutputTokens: 1024, timeoutMs: 15_000, priority: "background", cache: { mode: "disabled", ttlSeconds: 0 } },
-  { id: "hub.incident.explain", version: 1, app: "millionsnest", modality: "text", defaultSensitivity: "P1_INTERNAL", allowedProviders: ["groq","cloudflare"], blockedProviders: ["gemini","mistral"], streaming: true, capability: "ai:run", maxOutputTokens: 1200, timeoutMs: 15_000, priority: "interactive", cache: { mode: "disabled", ttlSeconds: 0 } },
+  { id: "hub.incident.explain", version: 1, app: "millionsnest", modality: "text", defaultSensitivity: "P1_INTERNAL", allowedProviders: ["groq","cloudflare"], blockedProviders: ["gemini","mistral"], streaming: true, capability: "ai:run", maxOutputTokens: 1200, timeoutMs: 15_000, priority: "interactive", cache: { mode: "disabled", ttlSeconds: 0 }, rag: true },
 
   { id: "connect.message.classify", version: 1, app: "connect", modality: "text", defaultSensitivity: "P2_PERSONAL", allowedProviders: ["groq","cloudflare"], blockedProviders: ["gemini","mistral"], streaming: false, capability: "ai:run", maxOutputTokens: 300, timeoutMs: 8_000, priority: "interactive", cache: { mode: "disabled", ttlSeconds: 0 } },
   { id: "connect.reply.suggest", version: 1, app: "connect", modality: "text", defaultSensitivity: "P2_PERSONAL", allowedProviders: ["groq", "cloudflare"], blockedProviders: ["gemini","mistral"], streaming: true, capability: "ai:run", maxOutputTokens: 768, timeoutMs: 12_000, priority: "interactive", cache: { mode: "disabled", ttlSeconds: 0 } },
@@ -37,8 +38,8 @@ export const tasks: TaskDefinition[] = [
   { id: "musicscale.song.structure", version: 1, app: "musicscale", modality: "text", defaultSensitivity: "P1_INTERNAL", allowedProviders: ["groq","cloudflare"], blockedProviders: ["gemini","mistral"], streaming: false, capability: "ai:run", maxOutputTokens: 900, timeoutMs: 12_000, priority: "interactive", cache: { mode: "disabled", ttlSeconds: 0 } },
   { id: "musicscale.team.message.compose", version: 1, app: "musicscale", modality: "text", defaultSensitivity: "P1_INTERNAL", allowedProviders: ["groq","cloudflare"], blockedProviders: ["gemini","mistral"], streaming: false, capability: "ai:run", maxOutputTokens: 700, timeoutMs: 10_000, priority: "interactive", cache: { mode: "disabled", ttlSeconds: 0 } },
 
-  { id: "nestlume.study.answer", version: 1, app: "nestlume", modality: "text", defaultSensitivity: "P1_INTERNAL", allowedProviders: ["groq", "cloudflare"], blockedProviders: ["gemini","mistral"], streaming: true, capability: "ai:run", maxOutputTokens: 1536, timeoutMs: 20_000, priority: "interactive", cache: { mode: "disabled", ttlSeconds: 0 } },
-  { id: "nestlume.entity.explain", version: 1, app: "nestlume", modality: "text", defaultSensitivity: "P1_INTERNAL", allowedProviders: ["groq","cloudflare"], blockedProviders: ["gemini","mistral"], streaming: true, capability: "ai:run", maxOutputTokens: 1200, timeoutMs: 18_000, priority: "interactive", cache: { mode: "disabled", ttlSeconds: 0 } },
+  { id: "nestlume.study.answer", version: 1, app: "nestlume", modality: "text", defaultSensitivity: "P1_INTERNAL", allowedProviders: ["groq", "cloudflare"], blockedProviders: ["gemini","mistral"], streaming: true, capability: "ai:run", maxOutputTokens: 1536, timeoutMs: 20_000, priority: "interactive", cache: { mode: "disabled", ttlSeconds: 0 }, rag: true },
+  { id: "nestlume.entity.explain", version: 1, app: "nestlume", modality: "text", defaultSensitivity: "P1_INTERNAL", allowedProviders: ["groq","cloudflare"], blockedProviders: ["gemini","mistral"], streaming: true, capability: "ai:run", maxOutputTokens: 1200, timeoutMs: 18_000, priority: "interactive", cache: { mode: "disabled", ttlSeconds: 0 }, rag: true },
   { id: "nestlume.embedding.generate", version: 1, app: "nestlume", modality: "embedding", defaultSensitivity: "P1_INTERNAL", allowedProviders: ["cloudflare"], blockedProviders: ["groq", "gemini", "mistral"], streaming: false, capability: "ai:run", maxOutputTokens: 0, timeoutMs: 15_000, priority: "background", cache: { mode: "disabled", ttlSeconds: 0 } },
 
   { id: "affiliate.product.analyze", version: 1, app: "nestaffiliate", modality: "text", defaultSensitivity: "P0_PUBLIC", allowedProviders: ["groq","cloudflare","gemini"], blockedProviders: ["mistral"], streaming: false, capability: "ai:run", maxOutputTokens: 1000, timeoutMs: 15_000, priority: "background", cache: { mode: "tenant", ttlSeconds: 1800 } },
