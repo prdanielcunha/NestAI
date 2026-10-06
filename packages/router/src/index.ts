@@ -1,5 +1,5 @@
 import type { BillingMode, Sensitivity } from "../../contracts/src/index.js";
-import { models, type ModelId } from "../../model-registry/src/index.js";
+import { models, type ModelDescriptor, type ModelId } from "../../model-registry/src/index.js";
 import { providerAllowed } from "../../policy-engine/src/index.js";
 
 export type RouteRequest = {
@@ -32,7 +32,7 @@ const preference: ModelId[] = [
   "cloudflare:gemma-4-26b-a4b-it",
 ];
 
-function supportsModality(model: (typeof models)[ModelId], modality: RouteRequest["modality"]): boolean {
+function supportsModality(model: ModelDescriptor, modality: RouteRequest["modality"]): boolean {
   if (modality === "text") return !model.audioIn;
   if (modality === "vision") return model.vision === true;
   if (modality === "audio") return model.audioIn === true;
@@ -41,7 +41,7 @@ function supportsModality(model: (typeof models)[ModelId], modality: RouteReques
 
 export function routeModel(request: RouteRequest): RouteDecision {
   for (const modelId of preference) {
-    const model = models[modelId];
+    const model: ModelDescriptor = models[modelId];
     if (model.status !== "production") continue;
     if (!request.allowedProviders.includes(model.provider)) continue;
     if (request.blockedProviders.includes(model.provider)) continue;
