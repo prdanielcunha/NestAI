@@ -20,7 +20,7 @@ describe("Worker API", () => {
   it("exposes a minimal non-secret health response", async () => {
     const response = await handleRequest(new Request("https://ai.millionsnest.com/health"), baseEnv());
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true, service: "nestai", billingMode: "FREE_ONLY" });
+    await expect(response.json()).resolves.toEqual({ ok: true, service: "nestai", billingMode: "FREE_ONLY", providers: { cloudflare: "ready", groq: "unconfigured" } });
   });
 
   it("requires authentication for task execution", async () => {
