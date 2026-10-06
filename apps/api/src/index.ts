@@ -23,7 +23,7 @@ import {
   type WorkersAiBinding,
 } from "../../../packages/providers/src/index.js";
 import { assertProviderFreeQuota, assertWithinFreeBudget } from "../../../packages/cost-guard/src/index.js";
-import { safeTrace } from "../../../packages/observability/src/index.js";
+import { safeTrace, persistTrace, recordProviderHealthSample, evaluateSloAlerts } from "../../../packages/observability/src/index.js";
 import { incrementUsage, getDimensionalUsage, incrementDimensionalUsage, recordRuntimeEvent, type D1DatabaseLike } from "../../../packages/usage-ledger/src/index.js";
 import { buildTaskPrompt } from "../../../packages/prompt-registry/src/index.js";
 import { getStructuredContract, validateStructuredText } from "../../../packages/structured-output/src/index.js";
@@ -264,11 +264,32 @@ async function withTimeout<T>(work: (signal: AbortSignal) => Promise<T>, timeout
 }
 
 async function generateForRoute(env: Env, request: GenerateRequest): Promise<GenerateResult> {
-  if (request.route.provider === "cloudflare") return generateWithCloudflare(env.AI, request);
-  if (request.route.provider === "groq") return generateWithGroq(env.GROQ_API_KEY ?? "", request);
-  if (request.route.provider === "gemini") return generateWithGemini(env.GEMINI_API_KEY ?? "", request);
-  if (request.route.provider === "mistral") return generateWithMistral(env.MISTRAL_API_KEY ?? "", request);
-  throw new Error("PROVIDER_NOT_IMPLEMENTED");
+  const started = Date.now();
+  try {
+    let result: GenerateResult;
+    if (request.route.provider === "cloudflare") result = await generateWithCloudflare(env.AI, request);
+    else if (request.route.provider === "groq") result = await generateWithGroq(env.GROQ_API_KEY ?? "", request);
+    else if (request.route.provider === "gemini") result = await generateWithGemini(env.GEMINI_API_KEY ?? "", request);
+    else if (request.route.provider === "mistral") result = await generateWithMistral(env.MISTRAL_API_KEY ?? "", request);
+    else throw new Error("PROVIDER_NOT_IMPLEMENTED");
+
+    await recordProviderHealthSample(env.DB, {
+      providerId: request.route.provider,
+      success: true,
+      durationMs: Date.now() - started,
+      circuitState: breaker.snapshot(request.route.provider + ":" + request.route.providerModelId).state,
+    });
+    return result;
+  } catch (error) {
+    await recordProviderHealthSample(env.DB, {
+      providerId: request.route.provider,
+      success: false,
+      durationMs: Date.now() - started,
+      errorCode: errorCode(error),
+      circuitState: breaker.snapshot(request.route.provider + ":" + request.route.providerModelId).state,
+    });
+    throw error;
+  }
 }
 
 async function streamForRoute(env: Env, request: GenerateRequest): Promise<AsyncIterable<string>> {
@@ -277,6 +298,11 @@ async function streamForRoute(env: Env, request: GenerateRequest): Promise<Async
   if (request.route.provider === "gemini") return streamWithGemini(env.GEMINI_API_KEY ?? "", request);
   if (request.route.provider === "mistral") return streamWithMistral(env.MISTRAL_API_KEY ?? "", request);
   throw new Error("PROVIDER_NOT_IMPLEMENTED");
+}
+
+async function emitTrace(env: Env, trace: Awaited<ReturnType<typeof safeTrace>>): Promise<void> {
+  await persistTrace(env.DB, trace);
+  await emitTrace(env, trace);
 }
 
 function sse(event: string, data: unknown): Uint8Array {
@@ -931,7 +957,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         toolUsage: false,
         outcome: "success",
       });
-      console.log(JSON.stringify(trace));
+      await emitTrace(env, trace);
 
       return json({
         requestId,
@@ -1090,7 +1116,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         toolUsage: false,
         outcome: "success",
       });
-      console.log(JSON.stringify(trace));
+      await emitTrace(env, trace);
       return json({
         requestId,
         task: prepared.task.id,
@@ -1170,7 +1196,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         toolUsage: false,
         outcome: "success",
       });
-      console.log(JSON.stringify(trace));
+      await emitTrace(env, trace);
       return json({
         requestId,
         task: prepared.task.id,
@@ -1220,7 +1246,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         toolUsage: false,
         outcome: "success",
       });
-      console.log(JSON.stringify(trace));
+      await emitTrace(env, trace);
       return json({
         requestId,
         task: prepared.task.id,
@@ -1273,7 +1299,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         toolUsage: false,
         outcome: "success",
       });
-      console.log(JSON.stringify(trace));
+      await emitTrace(env, trace);
       return json({
         requestId,
         task: prepared.task.id,
@@ -1399,7 +1425,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
                 toolUsage: false,
                 outcome: "success",
               });
-              console.log(JSON.stringify(trace));
+              await emitTrace(env, trace);
               controller.close();
             } catch (error) {
               const code = errorCode(error);
@@ -1494,7 +1520,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         toolUsage: false,
         outcome: "success",
       });
-      console.log(JSON.stringify(trace));
+      await emitTrace(env, trace);
       return json({
         requestId,
         task: task.id,
@@ -1567,7 +1593,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       toolUsage: false,
       outcome: "success",
     });
-    console.log(JSON.stringify(trace));
+    await emitTrace(env, trace);
 
     return json({
       requestId,
