@@ -25,10 +25,19 @@ export function assertManifestTaskOwnership(manifest: MillionsNestAppManifestTyp
   for (const task of manifest.ai.tasks) {
     const prefix = task.split(".")[0];
     if (!prefix) throw new Error("APP_MANIFEST_TASK_INVALID");
+    const namespaceAliases: Record<string, string[]> = {
+      millionsnest: ["hub"],
+      connect: ["connect"],
+      nestlocal: ["nestlocal"],
+      nestjourney: ["journey"],
+      nestfinance: ["finance"],
+      musicscale: ["musicscale"],
+      nestlume: ["nestlume"],
+      nestaffiliate: ["affiliate"],
+    };
     const acceptedPrefixes = new Set([
       manifest.appId,
-      manifest.appId.replace(/^millionsnest-/, ""),
-      manifest.appId.replace(/^nest/, "nest"),
+      ...(namespaceAliases[manifest.appId] ?? []),
     ]);
     if (!acceptedPrefixes.has(prefix) && !(manifest.appId === "connect" && prefix === "connect")) {
       throw new Error("APP_MANIFEST_TASK_NAMESPACE_MISMATCH");
