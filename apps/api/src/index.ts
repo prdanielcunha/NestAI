@@ -333,6 +333,71 @@ async function recordProviderAttempt(
   ]);
 }
 
+type PreparedTaskExecution = {
+  parsed: ReturnType<typeof TaskRequest.parse>;
+  task: TaskDefinition;
+  organizationId: string;
+  claims: NestAiClaims;
+  sensitivity: ReturnType<typeof classifyPrivacy>["sensitivity"];
+  locale: Locale;
+};
+
+async function prepareTaskExecution(
+  request: Request,
+  env: Env,
+  expectedModality: TaskDefinition["modality"],
+): Promise<PreparedTaskExecution> {
+  const raw = await request.json();
+  const parsed = TaskRequest.parse(raw);
+  const task = getTask(parsed.task);
+  if (task.modality !== expectedModality) throw new Error("TASK_MODALITY_MISMATCH");
+  assertKillSwitches(task, env);
+
+  const organizationId = parsed.context.organizationId;
+  if (!organizationId) throw new Error("AUTH_TENANT_REQUIRED");
+  const claims = await authenticateRequest({ request, env, task, organizationId });
+
+  const rate = await env.AI_RATE_LIMITER.limit({ key: claims.organizationId + ":" + claims.sub });
+  if (!rate.success) {
+    await recordRuntimeEvent(env.DB, { id: crypto.randomUUID(), eventType: "rate_limited", appId: task.app, task: task.id });
+    throw new Error("RATE_LIMITED");
+  }
+
+  const privacy = classifyPrivacy(parsed.input, task.defaultSensitivity);
+  if (!privacy.externalAllowed) {
+    await recordRuntimeEvent(env.DB, { id: crypto.randomUUID(), eventType: "privacy_rejected", appId: task.app, task: task.id });
+    throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
+  }
+
+  return {
+    parsed,
+    task,
+    organizationId,
+    claims,
+    sensitivity: privacy.sensitivity,
+    locale: (parsed.context.locale ?? claims.locale ?? "pt-BR") as Locale,
+  };
+}
+
+async function safeCandidates(
+  env: Env,
+  prepared: PreparedTaskExecution,
+  modality: TaskDefinition["modality"],
+  needsStructuredOutput = false,
+): Promise<RouteDecision[]> {
+  const candidates = routeCandidates({
+    sensitivity: prepared.sensitivity,
+    billingMode: env.AI_BILLING_MODE,
+    modality,
+    allowedProviders: prepared.task.allowedProviders,
+    blockedProviders: prepared.task.blockedProviders,
+    availableProviders: availableProviders(env),
+    needsStructuredOutput,
+  });
+  if (candidates.length === 0) throw new Error("ROUTER_NO_ELIGIBLE_MODEL");
+  return quotaEligibleCandidates(env, prepared.claims, prepared.task, prepared.organizationId, candidates);
+}
+
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
 
