@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "appId": "example-app",
+  "name": "Example MillionsNest App",
+  "ai": {
+    "enabled": true,
+    "tasks": [
+      "example-app.sample.task"
+    ],
+    "defaultSensitivity": "P1_INTERNAL"
+  },
+  "locales": [
+    "pt-BR",
+    "en",
+    "es"
+  ],
+  "owner": {
+    "repository": "prdanielcunha/example-app"
+  }
+}
