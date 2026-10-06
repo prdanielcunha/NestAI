@@ -38,7 +38,8 @@ function supportsModality(model: ModelDescriptor, modality: RouteRequest["modali
   return false;
 }
 
-export function routeModel(request: RouteRequest): RouteDecision {
+export function routeCandidates(request: RouteRequest): RouteDecision[] {
+  const decisions: RouteDecision[] = [];
   for (const modelId of preference) {
     const model: ModelDescriptor = models[modelId];
     if (model.status !== "production" && !(request.allowPreviewModels && model.status === "preview")) continue;
@@ -62,18 +63,24 @@ export function routeModel(request: RouteRequest): RouteDecision {
       },
     })) continue;
 
-    return {
+    decisions.push({
       modelId,
       provider: model.provider,
       providerModelId: model.providerModelId,
       reason: [
-        "production_model",
+        model.status === "production" ? "production_model" : "preview_model_explicitly_allowed",
         "provider_allowed_for_task",
         "privacy_policy_passed",
         request.billingMode === "FREE_ONLY" ? "free_only_passed" : "billing_policy_passed",
       ],
-    };
+    });
   }
 
-  throw new Error("ROUTER_NO_ELIGIBLE_MODEL");
+  return decisions;
+}
+
+export function routeModel(request: RouteRequest): RouteDecision {
+  const [decision] = routeCandidates(request);
+  if (!decision) throw new Error("ROUTER_NO_ELIGIBLE_MODEL");
+  return decision;
 }
