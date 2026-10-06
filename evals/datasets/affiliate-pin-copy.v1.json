@@ -1,0 +1,448 @@
+{
+  "schemaVersion": 1,
+  "taskId": "affiliate.pin.copy",
+  "version": 1,
+  "sanitized": true,
+  "cases": [
+    {
+      "id": "affiliate-pin-01",
+      "taskId": "affiliate.pin.copy",
+      "locale": "pt-BR",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 1",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-02",
+      "taskId": "affiliate.pin.copy",
+      "locale": "pt-BR",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 2",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-03",
+      "taskId": "affiliate.pin.copy",
+      "locale": "pt-BR",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 3",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-04",
+      "taskId": "affiliate.pin.copy",
+      "locale": "pt-BR",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 4",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-05",
+      "taskId": "affiliate.pin.copy",
+      "locale": "pt-BR",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 5",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-06",
+      "taskId": "affiliate.pin.copy",
+      "locale": "pt-BR",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 6",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-07",
+      "taskId": "affiliate.pin.copy",
+      "locale": "pt-BR",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 7",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-08",
+      "taskId": "affiliate.pin.copy",
+      "locale": "pt-BR",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 8",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-09",
+      "taskId": "affiliate.pin.copy",
+      "locale": "pt-BR",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 9",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-10",
+      "taskId": "affiliate.pin.copy",
+      "locale": "pt-BR",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 10",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-11",
+      "taskId": "affiliate.pin.copy",
+      "locale": "pt-BR",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 11",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-12",
+      "taskId": "affiliate.pin.copy",
+      "locale": "pt-BR",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 12",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-13",
+      "taskId": "affiliate.pin.copy",
+      "locale": "pt-BR",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 13",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-14",
+      "taskId": "affiliate.pin.copy",
+      "locale": "pt-BR",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 14",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-15",
+      "taskId": "affiliate.pin.copy",
+      "locale": "en",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 15",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-16",
+      "taskId": "affiliate.pin.copy",
+      "locale": "en",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 16",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-17",
+      "taskId": "affiliate.pin.copy",
+      "locale": "en",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 17",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-18",
+      "taskId": "affiliate.pin.copy",
+      "locale": "es",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 18",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-19",
+      "taskId": "affiliate.pin.copy",
+      "locale": "es",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 19",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    },
+    {
+      "id": "affiliate-pin-20",
+      "taskId": "affiliate.pin.copy",
+      "locale": "es",
+      "sensitivity": "P0_PUBLIC",
+      "input": {
+        "product": "Produto exemplo 20",
+        "facts": [
+          "material sintético",
+          "uso doméstico"
+        ],
+        "price": null
+      },
+      "forbiddenSubstrings": [
+        "cura garantida",
+        "100% garantido",
+        "preço de R$",
+        "últimas unidades"
+      ],
+      "maxLatencyMs": 5000,
+      "sanitized": true
+    }
+  ]
+}
