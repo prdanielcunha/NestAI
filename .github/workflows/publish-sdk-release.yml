@@ -1,0 +1,57 @@
+name: Publish SDK release
+on:
+  push:
+    branches: ["production"]
+    paths:
+      - "packages/sdk/**"
+      - ".github/workflows/publish-sdk-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm build:sdk
+      - name: Pack SDK
+        id: pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          PACKAGE_VERSION="$(node -p "require('./packages/sdk/package.json').version")"
+          PACKAGE_FILE="$(cd packages/sdk && pnpm pack --pack-destination ../../release | tail -n 1)"
+          PACKAGE_BASENAME="$(basename "$PACKAGE_FILE")"
+          test -f "release/$PACKAGE_BASENAME"
+          echo "version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "file=$PACKAGE_BASENAME" >> "$GITHUB_OUTPUT"
+      - name: Smoke package import
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module -e "const m=await import('./packages/sdk/dist/index.js'); if(typeof m.createNestAiClient!=='function') process.exit(1); console.log('NESTAI_SDK_IMPORT_OK')"
+      - name: Create or update GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.pack.outputs.version }}
+          FILE: ${{ steps.pack.outputs.file }}
+        run: |
+          set -euo pipefail
+          TAG="sdk-v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "release/$FILE" --clobber
+          else
+            gh release create "$TAG" "release/$FILE"               --target "${GITHUB_SHA}"               --title "@millionsnest/ai v$VERSION"               --notes "Official NestAI SDK package."
+          fi
+          echo "NESTAI_SDK_RELEASE=$TAG"
