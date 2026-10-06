@@ -16,7 +16,7 @@ function baseEnv(): Env {
         return statement;
       }),
     } as never,
-    HUB_TOKEN_PUBLIC_JWK: "{}",
+    HUB_JWKS_URL: "https://www.millionsnest.com/api/v1/ai/jwks",
     HUB_TOKEN_ISSUER: "https://millionsnest.com",
     NESTAI_TOKEN_AUDIENCE: "nestai",
     AI_BILLING_MODE: "FREE_ONLY",
