@@ -6,12 +6,14 @@ import { routeModel } from "../../../packages/router/src/index.js";
 import { generateWithCloudflare, generateWithGroq, type WorkersAiBinding } from "../../../packages/providers/src/index.js";
 import { assertWithinFreeBudget } from "../../../packages/cost-guard/src/index.js";
 import { safeTrace } from "../../../packages/observability/src/index.js";
+import { getUsage, incrementUsage, type D1DatabaseLike } from "../../../packages/usage-ledger/src/index.js";
 
 type RateLimiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
 
 export type Env = {
   AI: WorkersAiBinding;
   AI_RATE_LIMITER: RateLimiter;
+  DB: D1DatabaseLike;
   GROQ_API_KEY?: string;
   HUB_TOKEN_PUBLIC_JWK: string;
   HUB_TOKEN_ISSUER: string;
@@ -78,11 +80,6 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     const privacy = classifyPrivacy(parsed.input, task.defaultSensitivity);
     if (!privacy.externalAllowed) throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
 
-    assertWithinFreeBudget(
-      { requestsToday: 0, providerCallsToday: 0 },
-      { maxRequestsPerDay: 90_000, maxProviderCallsPerDay: 900 },
-    );
-
     const route = routeModel({
       sensitivity: privacy.sensitivity,
       billingMode: "FREE_ONLY",
@@ -90,6 +87,12 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       allowedProviders: task.allowedProviders,
       blockedProviders: task.blockedProviders,
     });
+
+    const usage = await getUsage(env.DB, organizationId, route.provider);
+    assertWithinFreeBudget(
+      { requestsToday: usage.requests, providerCallsToday: usage.provider_calls },
+      { maxRequestsPerDay: 900, maxProviderCallsPerDay: 900 },
+    );
 
     const generateRequest = {
       route,
@@ -99,6 +102,8 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     const result = route.provider === "cloudflare"
       ? await generateWithCloudflare(env.AI, generateRequest)
       : await generateWithGroq(env.GROQ_API_KEY ?? "", generateRequest);
+
+    await incrementUsage(env.DB, organizationId, route.provider);
 
     const trace = await safeTrace({
       traceId,
