@@ -35,3 +35,53 @@ export function assertManifestTaskOwnership(manifest: MillionsNestAppManifestTyp
     }
   }
 }
+
+
+export async function persistAppManifest(
+  db: import("../../usage-ledger/src/index.js").D1DatabaseLike,
+  manifest: MillionsNestAppManifestType,
+  source: { ref?: string; sha?: string },
+  now = new Date(),
+): Promise<void> {
+  const timestamp = now.toISOString();
+  await db.prepare(
+    "INSERT INTO cp_app_manifests(" +
+    "app_id, repository, manifest_version, manifest_json, registration_source, " +
+    "source_ref, source_sha, registered_at, updated_at" +
+    ") VALUES (?1, ?2, ?3, ?4, 'github_oidc', ?5, ?6, ?7, ?7) " +
+    "ON CONFLICT(app_id) DO UPDATE SET " +
+    "repository = excluded.repository, " +
+    "manifest_version = excluded.manifest_version, " +
+    "manifest_json = excluded.manifest_json, " +
+    "registration_source = excluded.registration_source, " +
+    "source_ref = excluded.source_ref, " +
+    "source_sha = excluded.source_sha, " +
+    "updated_at = excluded.updated_at"
+  ).bind(
+    manifest.appId,
+    manifest.owner.repository,
+    manifest.schemaVersion,
+    JSON.stringify(manifest),
+    source.ref ?? null,
+    source.sha ?? null,
+    timestamp,
+  ).run();
+
+  await db.prepare(
+    "INSERT INTO cp_apps(app_id, display_name, default_locale, enabled, manifest_version, updated_at) " +
+    "VALUES (?1, ?2, ?3, ?4, ?5, ?6) " +
+    "ON CONFLICT(app_id) DO UPDATE SET " +
+    "display_name = excluded.display_name, " +
+    "default_locale = excluded.default_locale, " +
+    "enabled = excluded.enabled, " +
+    "manifest_version = excluded.manifest_version, " +
+    "updated_at = excluded.updated_at"
+  ).bind(
+    manifest.appId,
+    manifest.name,
+    manifest.locales[0] ?? "pt-BR",
+    manifest.ai.enabled ? 1 : 0,
+    manifest.schemaVersion,
+    timestamp,
+  ).run();
+}
