@@ -1,11 +1,12 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
-function wrangler(args) {
+function wrangler(args, input) {
   return execFileSync("pnpm", ["wrangler", ...args], {
     encoding: "utf8",
     env: process.env,
-    stdio: ["ignore", "pipe", "pipe"],
+    input,
+    stdio: ["pipe", "pipe", "pipe"],
   });
 }
 
@@ -37,6 +38,6 @@ config.d1_databases = [{
 writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
 
 console.log("D1 nestai resolved and wrangler config updated.");
-wrangler(["d1", "migrations", "apply", "nestai", "--remote", "--yes"]);
+wrangler(["d1", "migrations", "apply", "nestai", "--remote"], "y\n");
 const info = JSON.parse(wrangler(["d1", "info", "nestai", "--json"]));
 console.log(JSON.stringify({ name: info.name ?? "nestai", uuid: db.uuid, migrationApplied: true }));
