@@ -53,7 +53,7 @@ for(const name of ["nestai-jobs","nestai-jobs-dlq"]){
   createIfMissing(["queues","create",name],"QUEUE_"+name.toUpperCase().replaceAll("-","_"));
 }
 config.queues={
-  producers:[{binding:"JOBS",queue:"nestai-jobs"}],
+  producers:[{binding:"JOBS",queue:"nestai-jobs"},{binding:"JOBS_DLQ",queue:"nestai-jobs-dlq"}],
   consumers:[{
     queue:"nestai-jobs",
     max_batch_size:10,
