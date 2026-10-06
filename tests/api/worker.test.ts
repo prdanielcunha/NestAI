@@ -162,7 +162,7 @@ describe("Worker API", () => {
     const response = await handleRequest(new Request("https://ai.millionsnest.com/v1/chat/stream", {
       method: "POST",
       headers: {
-        authorization: \`Bearer \${token}\`,
+        authorization: `Bearer ${token}`,
         "content-type": "application/json",
         "x-millionsnest-app": "nestlume",
         accept: "text/event-stream",
