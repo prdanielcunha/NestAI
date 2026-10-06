@@ -36,11 +36,15 @@ export async function jobOrganizationHash(value: string): Promise<string> {
     .slice(0, 24);
 }
 
-export function createJob<T>(
-  input: Omit<JobEnvelope<T>, "id" | "createdAt" | "attempt">,
-): JobEnvelope<T> {
+export type CreateJobInput<T> =
+  Omit<JobEnvelope<T>, "id" | "createdAt" | "attempt" | "locale"> & {
+    locale?: "pt-BR" | "en" | "es";
+  };
+
+export function createJob<T>(input: CreateJobInput<T>): JobEnvelope<T> {
   return {
     ...input,
+    locale: input.locale ?? "pt-BR",
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     attempt: 0,
