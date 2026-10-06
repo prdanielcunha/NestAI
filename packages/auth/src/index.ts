@@ -68,10 +68,15 @@ export async function verifyNestAiToken(token: string, options: VerifyTokenOptio
   );
 
   const signed = new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`);
+  const signatureBytes = decodeBase64Url(encodedSignature);
+  const signature = signatureBytes.buffer.slice(
+    signatureBytes.byteOffset,
+    signatureBytes.byteOffset + signatureBytes.byteLength,
+  ) as ArrayBuffer;
   const valid = await crypto.subtle.verify(
     { name: "ECDSA", hash: "SHA-256" },
     key,
-    decodeBase64Url(encodedSignature),
+    signature,
     signed,
   );
   if (!valid) throw new Error("AUTH_BAD_SIGNATURE");
