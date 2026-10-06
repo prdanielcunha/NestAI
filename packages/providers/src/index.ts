@@ -206,7 +206,32 @@ export async function streamWithGroq(apiKey: string, request: GenerateRequest): 
   return parseOpenAiCompatibleSse(response);
 }
 
-export async function streamWithCloudflare(ai: WorkersAiBinding, request: GenerateRequest): Promise<ReadableStream<Uint8Array>> {
+async function* parseCloudflareSse(stream: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+      const parsed = JSON.parse(data) as {
+        response?: string;
+        choices?: Array<{ delta?: { content?: string } }>;
+      };
+      const delta = parsed.response ?? parsed.choices?.[0]?.delta?.content;
+      if (delta) yield delta;
+    }
+  }
+}
+
+export async function streamWithCloudflare(ai: WorkersAiBinding, request: GenerateRequest): Promise<AsyncIterable<string>> {
   const response = await ai.run(
     request.route.providerModelId,
     {
@@ -217,5 +242,67 @@ export async function streamWithCloudflare(ai: WorkersAiBinding, request: Genera
     { gateway: { id: "default", collectLog: true } },
   );
   if (!(response instanceof ReadableStream)) throw new Error("PROVIDER_STREAM_UNSUPPORTED");
-  return response;
+  return parseCloudflareSse(response);
+}
+
+export async function streamWithGemini(apiKey: string, request: GenerateRequest): Promise<AsyncIterable<string>> {
+  if (!apiKey) throw new Error("PROVIDER_GEMINI_KEY_MISSING");
+  const response = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(request.route.providerModelId) + ":streamGenerateContent?alt=sse&key=" + encodeURIComponent(apiKey),
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      ...(request.signal ? { signal: request.signal } : {}),
+      body: JSON.stringify({
+        systemInstruction: geminiSystem(request.messages),
+        contents: geminiContents(request.messages),
+        generationConfig: { maxOutputTokens: request.maxTokens ?? 1024, temperature: 0.2 },
+      }),
+    },
+  );
+  if (!response.ok) throw new Error("PROVIDER_GEMINI_HTTP_" + response.status);
+  if (!response.body) throw new Error("PROVIDER_STREAM_BODY_MISSING");
+
+  async function* iterator(): AsyncGenerator<string> {
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const raw of lines) {
+        const line = raw.trim();
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (!data) continue;
+        const parsed = JSON.parse(data) as {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
+        const delta = parsed.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("");
+        if (delta) yield delta;
+      }
+    }
+  }
+  return iterator();
+}
+
+export async function streamWithMistral(apiKey: string, request: GenerateRequest): Promise<AsyncIterable<string>> {
+  if (!apiKey) throw new Error("PROVIDER_MISTRAL_KEY_MISSING");
+  const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
+    method: "POST",
+    headers: { authorization: "Bearer " + apiKey, "content-type": "application/json" },
+    ...(request.signal ? { signal: request.signal } : {}),
+    body: JSON.stringify({
+      model: request.route.providerModelId,
+      messages: request.messages,
+      max_tokens: request.maxTokens ?? 1024,
+      temperature: 0.2,
+      stream: true,
+    }),
+  });
+  if (!response.ok) throw new Error("PROVIDER_MISTRAL_HTTP_" + response.status);
+  return parseOpenAiCompatibleSse(response);
 }
