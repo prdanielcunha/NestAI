@@ -192,6 +192,10 @@ export class NestAiClient {
     return this.run<TResult>({ task, input });
   }
 
+  async getAccessToken(): Promise<string> {
+    return this.nestAiToken();
+  }
+
   clearTokenCache(): void {
     this.tokenCache = null;
   }
