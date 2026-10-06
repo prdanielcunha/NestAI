@@ -1,7 +1,7 @@
 export type ModelStatus = "production" | "preview" | "blocked";
 
 export type ModelDescriptor = {
-  provider: "groq" | "cloudflare";
+  provider: "groq" | "cloudflare" | "gemini" | "mistral";
   providerModelId: string;
   status: ModelStatus;
   freeEligible: boolean;
@@ -12,6 +12,9 @@ export type ModelDescriptor = {
   reasoning?: boolean;
   vision?: boolean;
   audioIn?: boolean;
+  license?: string;
+  commercialUse?: "allowed" | "review_required";
+  attributionRequired?: boolean;
   reviewedAt: string;
 };
 
@@ -82,6 +85,35 @@ export const models = {
     context: 32000,
     tools: true,
     reasoning: true,
+    reviewedAt: "2026-10-06",
+  },
+  "gemini:2.5-flash-lite": {
+    provider: "gemini",
+    providerModelId: "gemini-2.5-flash-lite",
+    status: "preview",
+    freeEligible: true,
+    paidRequired: false,
+    context: 1000000,
+    structuredOutput: true,
+    tools: true,
+    vision: true,
+    commercialUse: "review_required",
+    attributionRequired: false,
+    reviewedAt: "2026-10-06",
+  },
+  "mistral:small-2603": {
+    provider: "mistral",
+    providerModelId: "mistral-small-2603",
+    status: "preview",
+    freeEligible: false,
+    paidRequired: true,
+    context: 256000,
+    structuredOutput: true,
+    tools: true,
+    reasoning: true,
+    license: "Apache-2.0",
+    commercialUse: "allowed",
+    attributionRequired: false,
     reviewedAt: "2026-10-06",
   },
   "cloudflare:kimi-k2.7-code": {
