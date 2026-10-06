@@ -12,6 +12,9 @@ export type ModelDescriptor = {
   reasoning?: boolean;
   vision?: boolean;
   audioIn?: boolean;
+  embedding?: boolean;
+  embeddingDimensions?: number;
+  imageOut?: boolean;
   license?: string;
   commercialUse?: "allowed" | "review_required";
   attributionRequired?: boolean;
@@ -85,6 +88,40 @@ export const models = {
     context: 32000,
     tools: true,
     reasoning: true,
+    reviewedAt: "2026-10-06",
+  },
+  "cloudflare:whisper-large-v3-turbo": {
+    provider: "cloudflare",
+    providerModelId: "@cf/openai/whisper-large-v3-turbo",
+    status: "production",
+    freeEligible: true,
+    paidRequired: false,
+    audioIn: true,
+    commercialUse: "review_required",
+    attributionRequired: false,
+    reviewedAt: "2026-10-06",
+  },
+  "cloudflare:embeddinggemma-300m": {
+    provider: "cloudflare",
+    providerModelId: "@cf/google/embeddinggemma-300m",
+    status: "production",
+    freeEligible: true,
+    paidRequired: false,
+    embedding: true,
+    embeddingDimensions: 768,
+    commercialUse: "review_required",
+    attributionRequired: false,
+    reviewedAt: "2026-10-06",
+  },
+  "cloudflare:flux-1-schnell": {
+    provider: "cloudflare",
+    providerModelId: "@cf/black-forest-labs/flux-1-schnell",
+    status: "production",
+    freeEligible: true,
+    paidRequired: false,
+    imageOut: true,
+    commercialUse: "review_required",
+    attributionRequired: false,
     reviewedAt: "2026-10-06",
   },
   "gemini:2.5-flash-lite": {
