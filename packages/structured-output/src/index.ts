@@ -18,6 +18,16 @@ const receiptSchema = z.object({
   missingFields: z.array(z.string()),
 });
 
+const journeyFormSchema = z.object({
+  candidates: z.array(z.object({
+    field: z.string().min(1),
+    value: z.string().nullable(),
+    confidence: z.number().min(0).max(1),
+  })),
+  unreadableFields: z.array(z.string()),
+  needsHumanReview: z.literal(true),
+});
+
 const affiliatePinSchema = z.object({
   title: z.string().min(1).max(100),
   description: z.string().min(1).max(500),
@@ -40,6 +50,32 @@ export const structuredContracts: Record<string, StructuredContract> = {
         documentNumber: { type: ["string", "null"] },
         confidence: { type: "number", minimum: 0, maximum: 1 },
         missingFields: { type: "array", items: { type: "string" } },
+      },
+    },
+  },
+  "journey.form.extract": {
+    id: "journey.form.extract.v1",
+    schema: journeyFormSchema,
+    jsonSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["candidates", "unreadableFields", "needsHumanReview"],
+      properties: {
+        candidates: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["field", "value", "confidence"],
+            properties: {
+              field: { type: "string", minLength: 1 },
+              value: { type: ["string", "null"] },
+              confidence: { type: "number", minimum: 0, maximum: 1 },
+            },
+          },
+        },
+        unreadableFields: { type: "array", items: { type: "string" } },
+        needsHumanReview: { const: true },
       },
     },
   },
