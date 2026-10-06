@@ -113,7 +113,20 @@ export type ObservabilityData = {
   day?: string;
   totalEvents?: number;
   events?: Array<Record<string, unknown>>;
+  traces?: Array<Record<string, unknown>>;
   providerHealth?: Array<Record<string, unknown>>;
+  alerts?: Array<Record<string, unknown>>;
+  incidents?: Array<Record<string, unknown>>;
+  slo?: {
+    totalRequests?: number;
+    errorRate?: number;
+    routerErrorRate?: number;
+    schemaFailureRate?: number;
+    p95Ms?: number;
+    fallbackRate?: number;
+    deadLetteredJobs?: number;
+    paidSpendBrl?: number;
+  };
 };
 export type PoliciesData = {
   policies?: {
