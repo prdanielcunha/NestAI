@@ -52,3 +52,21 @@ jobs:
             "$BASE_URL/v1/run")"
           test "$STATUS" = "401"
           node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/run-unauth.json','utf8'));if(x.error!=='AUTH_MISSING_BEARER')process.exit(1);console.log('NESTAI_LIVE_AUTH_GATE_OK');"
+      - name: Official domain smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL="https://ai.millionsnest.com"
+
+          curl --fail --silent --show-error \
+            --retry 20 --retry-delay 3 --retry-all-errors \
+            "$BASE_URL/health" -o /tmp/domain-health.json
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const health = JSON.parse(fs.readFileSync('/tmp/domain-health.json','utf8'));
+          if (health.ok !== true || health.service !== 'nestai' || health.billingMode !== 'FREE_ONLY') {
+            throw new Error('NESTAI_DOMAIN_HEALTH_INVALID');
+          }
+          console.log('NESTAI_OFFICIAL_DOMAIN_HEALTH_OK');
+          NODE
