@@ -115,7 +115,7 @@ function SignInGate({ locale, user, onSignIn }: { locale: Locale; user: User | n
   );
 }
 
-function OverviewPage({ locale, health, data }: { locale: Locale; health: api.Health | null; data: any }) {
+function OverviewPage({ locale, health, data }: { locale: Locale; health: api.Health | null; data: api.OverviewData | null }) {
   const usage = data?.providerUsage ?? {};
   return (
     <div className="page-grid">
@@ -168,7 +168,7 @@ function OverviewPage({ locale, health, data }: { locale: Locale; health: api.He
           ? <Empty text={tr(locale, "noData")} />
           : <div className="quota-grid">
               {Object.entries(usage).map(([provider, raw]) => {
-                const item = raw as any;
+                const item = raw;
                 const pct = item.hardLimit ? Math.max(0, Math.round((item.remaining / item.hardLimit) * 100)) : 0;
                 return (
                   <div className="quota-card" key={provider}>
@@ -185,13 +185,13 @@ function OverviewPage({ locale, health, data }: { locale: Locale; health: api.He
   );
 }
 
-function AppsPage({ locale, data }: { locale: Locale; data: any }) {
+function AppsPage({ locale, data }: { locale: Locale; data: api.AppsData | null }) {
   const rows = data?.apps ?? [];
   return (
     <div className="page-grid">
       <PageIntro eyebrow="ECOSYSTEM" title="Apps" text="Integrações autorizadas a consumir capabilities do NestAI sem carregar provider secrets." />
       <div className="card-grid span-12">
-        {rows.map((app: any) => (
+        {rows.map((app) => (
           <Card key={app.appId}>
             <div className="entity-card">
               <div className="entity-head">
@@ -213,7 +213,7 @@ function AppsPage({ locale, data }: { locale: Locale; data: any }) {
   );
 }
 
-function TasksPage({ locale, data }: { locale: Locale; data: any }) {
+function TasksPage({ locale, data }: { locale: Locale; data: api.TasksData | null }) {
   const rows = data?.tasks ?? [];
   return (
     <div className="page-grid">
@@ -223,7 +223,7 @@ function TasksPage({ locale, data }: { locale: Locale; data: any }) {
           <table>
             <thead><tr><th>Task</th><th>App</th><th>Modality</th><th>Sensitivity</th><th>Streaming</th><th>Schema</th><th>Priority</th></tr></thead>
             <tbody>
-              {rows.map((task: any) => (
+              {rows.map((task) => (
                 <tr key={task.id}>
                   <td><strong>{task.id}</strong><small>v{task.version}</small></td>
                   <td>{task.app}</td><td>{task.modality}</td><td><StatusPill>{task.defaultSensitivity}</StatusPill></td>
@@ -239,7 +239,7 @@ function TasksPage({ locale, data }: { locale: Locale; data: any }) {
   );
 }
 
-function RouterPage({ data }: { data: any }) {
+function RouterPage({ data }: { data: api.RoutesData | null }) {
   const rows = data?.routes ?? [];
   const selected = rows[0];
   return (
@@ -255,7 +255,7 @@ function RouterPage({ data }: { data: any }) {
             <Node kind="policy" label="FREE_ONLY" meta="paid fallback locked" />
             <div className="branch-line" />
             <div className="branch-grid">
-              {(selected.candidates ?? []).slice(0, 3).map((candidate: any, index: number) => (
+              {(selected.candidates ?? []).slice(0, 3).map((candidate, index) => (
                 <Node key={candidate.modelId} kind={index === 0 ? "primary" : "fallback"} label={candidate.provider} meta={index === 0 ? "primary" : "fallback"} />
               ))}
             </div>
@@ -264,20 +264,20 @@ function RouterPage({ data }: { data: any }) {
       </Card>
       <Card title="Routes" eyebrow="VERSIONED" className="span-4">
         <div className="status-list dense">
-          {rows.map((route: any) => <div className="status-row" key={route.id}><span>{route.task}</span><StatusPill>{route.primary?.provider ?? "none"}</StatusPill></div>)}
+          {rows.map((route) => <div className="status-row" key={route.id}><span>{route.task}</span><StatusPill>{route.primary?.provider ?? "none"}</StatusPill></div>)}
         </div>
       </Card>
     </div>
   );
 }
 
-function ProvidersPage({ data }: { data: any }) {
+function ProvidersPage({ data }: { data: api.ProvidersData | null }) {
   const rows = data?.providers ?? [];
   return (
     <div className="page-grid">
       <PageIntro eyebrow="SUPPLY LAYER" title="Providers" text="Eligibility, privacy ceiling, licensing and model inventory are explicit policy inputs." />
       <div className="provider-grid span-12">
-        {rows.map((provider: any) => (
+        {rows.map((provider) => (
           <Card key={provider.id}>
             <div className="entity-card provider-card">
               <div className="entity-head">
@@ -288,7 +288,7 @@ function ProvidersPage({ data }: { data: any }) {
               <div className="kv"><span>Max sensitivity</span><strong>{provider.maxSensitivity}</strong></div>
               <div className="kv"><span>Data policy</span><strong>{provider.dataPolicy}</strong></div>
               <div className="kv"><span>Terms reviewed</span><strong>{provider.termsReviewedAt}</strong></div>
-              <div className="chips">{(provider.models ?? []).map((m: any) => <span key={m.id}>{m.id}</span>)}</div>
+              <div className="chips">{(provider.models ?? []).map((m) => <span key={m.id}>{m.id}</span>)}</div>
               <div className="secret-row"><span>Secret</span><strong>{provider.id === "cloudflare" ? "Binding" : "Configured •••••••• / runtime"}</strong></div>
             </div>
           </Card>
@@ -298,7 +298,7 @@ function ProvidersPage({ data }: { data: any }) {
   );
 }
 
-function PromptsPage({ data }: { data: any }) {
+function PromptsPage({ data }: { data: api.PromptsData | null }) {
   const rows = data?.prompts ?? [];
   const selected = rows[0];
   return (
@@ -323,7 +323,7 @@ function PromptsPage({ data }: { data: any }) {
   );
 }
 
-function KnowledgePage({ data }: { data: any }) {
+function KnowledgePage({ data }: { data: api.KnowledgeData | null }) {
   const sources = data?.sources ?? [];
   const indexes = data?.indexes ?? [];
   return (
@@ -340,7 +340,7 @@ function KnowledgePage({ data }: { data: any }) {
   );
 }
 
-function EvaluationsPage({ data }: { data: any }) {
+function EvaluationsPage({ data }: { data: api.EvaluationsData | null }) {
   const suites = data?.suites ?? [];
   const runs = data?.runs ?? [];
   return (
@@ -358,7 +358,7 @@ function EvaluationsPage({ data }: { data: any }) {
   );
 }
 
-function ObservabilityPage({ data }: { data: any }) {
+function ObservabilityPage({ data }: { data: api.ObservabilityData | null }) {
   return (
     <div className="page-grid">
       <PageIntro eyebrow="NO PRIVATE PAYLOADS" title="Observability" text="Request IDs, timings, outcomes, quota and fallback metadata without prompt/output logging." />
@@ -378,7 +378,7 @@ function ObservabilityPage({ data }: { data: any }) {
   );
 }
 
-function PoliciesPage({ data }: { data: any }) {
+function PoliciesPage({ data }: { data: api.PoliciesData | null }) {
   const policy = data?.policies ?? {};
   return (
     <div className="page-grid">
@@ -386,7 +386,7 @@ function PoliciesPage({ data }: { data: any }) {
       <Card title="Data classes" className="span-7">
         <div className="policy-grid">
           {Object.entries(policy.dataClasses ?? {}).map(([key, value]) => (
-            <div className="policy-row" key={key}><strong>{key}</strong><StatusPill>{(value as any).external}</StatusPill></div>
+            <div className="policy-row" key={key}><strong>{key}</strong><StatusPill>{(value as { external?: string }).external}</StatusPill></div>
           ))}
         </div>
       </Card>
@@ -402,7 +402,7 @@ function PoliciesPage({ data }: { data: any }) {
   );
 }
 
-function CostPage({ locale, data }: { locale: Locale; data: any }) {
+function CostPage({ locale, data }: { locale: Locale; data: api.CostData | null }) {
   return (
     <div className="page-grid">
       <PageIntro eyebrow="ECONOMICS" title="Cost & Quota" text="Capacity is treated as a budget even while actual provider spend is zero." />
@@ -418,7 +418,7 @@ function CostPage({ locale, data }: { locale: Locale; data: any }) {
   );
 }
 
-function AuditPage({ data }: { data: any }) {
+function AuditPage({ data }: { data: api.AuditData | null }) {
   const events = data?.events ?? [];
   return (
     <div className="page-grid">
@@ -468,7 +468,7 @@ export function App() {
   const [locale, setLocale] = useState<Locale>((localStorage.getItem("nestai-locale") as Locale) || "pt-BR");
   const [healthData, setHealthData] = useState<api.Health | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [adminData, setAdminData] = useState<any>(null);
+  const [adminData, setAdminData] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [palette, setPalette] = useState(false);
@@ -501,7 +501,7 @@ export function App() {
     "/policies": api.policies,
     "/cost": api.cost,
     "/audit": api.audit,
-  } as Record<string, () => Promise<any>>)[path] ?? api.overview, [path]);
+  } as Record<string, () => Promise<unknown>>)[path] ?? api.overview, [path]);
 
   useEffect(() => {
     setAdminData(null);
@@ -515,18 +515,18 @@ export function App() {
 
   const navCurrent = navItems.find((item) => item.path === path) ?? navItems[0]!;
   const content = (() => {
-    if (path === "/apps") return <AppsPage locale={locale} data={adminData} />;
-    if (path === "/tasks") return <TasksPage locale={locale} data={adminData} />;
-    if (path === "/routes") return <RouterPage data={adminData} />;
-    if (path === "/providers") return <ProvidersPage data={adminData} />;
-    if (path === "/prompts") return <PromptsPage data={adminData} />;
-    if (path === "/knowledge") return <KnowledgePage data={adminData} />;
-    if (path === "/evals") return <EvaluationsPage data={adminData} />;
-    if (path === "/observability") return <ObservabilityPage data={adminData} />;
-    if (path === "/policies") return <PoliciesPage data={adminData} />;
-    if (path === "/cost") return <CostPage locale={locale} data={adminData} />;
-    if (path === "/audit") return <AuditPage data={adminData} />;
-    return <OverviewPage locale={locale} health={healthData} data={adminData} />;
+    if (path === "/apps") return <AppsPage locale={locale} data={adminData as api.AppsData | null} />;
+    if (path === "/tasks") return <TasksPage locale={locale} data={adminData as api.TasksData | null} />;
+    if (path === "/routes") return <RouterPage data={adminData as api.RoutesData | null} />;
+    if (path === "/providers") return <ProvidersPage data={adminData as api.ProvidersData | null} />;
+    if (path === "/prompts") return <PromptsPage data={adminData as api.PromptsData | null} />;
+    if (path === "/knowledge") return <KnowledgePage data={adminData as api.KnowledgeData | null} />;
+    if (path === "/evals") return <EvaluationsPage data={adminData as api.EvaluationsData | null} />;
+    if (path === "/observability") return <ObservabilityPage data={adminData as api.ObservabilityData | null} />;
+    if (path === "/policies") return <PoliciesPage data={adminData as api.PoliciesData | null} />;
+    if (path === "/cost") return <CostPage locale={locale} data={adminData as api.CostData | null} />;
+    if (path === "/audit") return <AuditPage data={adminData as api.AuditData | null} />;
+    return <OverviewPage locale={locale} health={healthData} data={adminData as api.OverviewData | null} />;
   })();
 
   return (
