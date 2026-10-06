@@ -205,6 +205,65 @@ describe("Worker API", () => {
     fetchMock.mockRestore();
   });
 
+  it("reports D1 degradation without exposing internal details", async () => {
+    const env = baseEnv();
+    env.DB = {
+      prepare: vi.fn(() => { throw new Error("D1_DOWN"); }),
+    } as never;
+    const response = await handleRequest(new Request("https://ai.millionsnest.com/v1/health"), env);
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ok: boolean; state: string; layers: Record<string,string> };
+    expect(body.ok).toBe(false);
+    expect(body.state).toBe("degraded");
+    expect(body.layers.d1).toBe("degraded");
+  });
+
+  it("turns a partial provider stream failure into a canonical SSE error event", async () => {
+    resetHubJwksCacheForTests();
+    const { token, publicJwk } = await issueWorkerToken();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
+      keys: [publicJwk],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+
+    const env = baseEnv();
+    const encoder = new TextEncoder();
+    env.AI = {
+      run: vi.fn(async (_model: string, input: unknown) => {
+        if ((input as { stream?: boolean }).stream) {
+          return new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(encoder.encode('data: {"response":"parcial"}\n\n'));
+              controller.error(new Error("capacity lost"));
+            },
+          });
+        }
+        return { response: "ok" };
+      }),
+    };
+
+    const response = await handleRequest(new Request("https://ai.millionsnest.com/v1/chat/stream", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer " + token,
+        "content-type": "application/json",
+        "x-millionsnest-app": "nestlume",
+        accept: "text/event-stream",
+      },
+      body: JSON.stringify({
+        task: "nestlume.study.answer",
+        input: "teste de stream",
+        context: { organizationId: "org-1", locale: "pt-BR" },
+      }),
+    }), env);
+
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text).toContain("event: start");
+    expect(text).toContain("event: error");
+    expect(text).not.toContain("@cf/");
+    fetchMock.mockRestore();
+  });
+
   it("does not expose task execution on arbitrary paths", async () => {
     const response = await handleRequest(new Request("https://ai.millionsnest.com/admin"), baseEnv());
     expect(response.status).toBe(404);
