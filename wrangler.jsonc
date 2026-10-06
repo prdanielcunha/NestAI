@@ -37,7 +37,7 @@
     {
       "binding": "DB",
       "database_name": "nestai",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "36a702d0-729a-4018-b8ae-73c3a12b3525",
       "migrations_dir": "migrations"
     }
   ]
