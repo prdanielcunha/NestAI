@@ -10,12 +10,14 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:security": "vitest run tests/security",
-    "build": "tsc -p tsconfig.json --noEmit && pnpm build:console",
+    "build": "tsc -p tsconfig.json --noEmit && pnpm build:sdk && pnpm build:console",
     "verify:branches": "node scripts/verify-branch-sync.mjs",
     "cf:types": "wrangler types",
     "deploy": "wrangler deploy",
     "deploy:dry": "wrangler deploy --dry-run",
-    "build:console": "pnpm --filter @millionsnest/nestai-console build"
+    "build:console": "pnpm --filter @millionsnest/nestai-console build",
+    "build:sdk": "pnpm --filter @millionsnest/ai build",
+    "pack:sdk": "pnpm --filter @millionsnest/ai pack"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
