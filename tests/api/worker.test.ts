@@ -5,7 +5,17 @@ function baseEnv(): Env {
   return {
     AI: { run: vi.fn(async () => ({ response: "ok" })) },
     AI_RATE_LIMITER: { limit: vi.fn(async () => ({ success: true })) },
-    DB: { prepare: vi.fn(() => ({ bind: vi.fn(function () { return this; }), first: vi.fn(async () => null), run: vi.fn(async () => ({})) })) } as never,
+    DB: {
+      prepare: vi.fn(() => {
+        const statement = {
+          bind: vi.fn(),
+          first: vi.fn(async () => null),
+          run: vi.fn(async () => ({})),
+        };
+        statement.bind.mockReturnValue(statement);
+        return statement;
+      }),
+    } as never,
     HUB_TOKEN_PUBLIC_JWK: "{}",
     HUB_TOKEN_ISSUER: "https://millionsnest.com",
     NESTAI_TOKEN_AUDIENCE: "nestai",
