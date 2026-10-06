@@ -1,6 +1,6 @@
 # NestAI — MillionsNest Intelligence Platform
 
-**Current Architecture Version:** 1.1-bootstrap  
+**Current Architecture Version:** 1.2-core-runtime  
 **Last Updated:** 2026-10-06  
 **Production SHA:** NOT DEPLOYED  
 **Main SHA:** see Git history (updated automatically after release tooling lands)  
@@ -17,15 +17,23 @@
 - Canonical contracts for sensitivity and billing mode.
 - Task-based registry seed.
 - Model registry seed.
-- Privacy/cost policy primitives.
-- FREE_ONLY boot invariants.
-- Security regression seed.
-- CI quality gates and branch-sync verifier.
-- Architecture/security/privacy/provider/task/RAG/runbook documentation.
+- Privacy Firewall with P0-P4 escalation and P4 external blocking.
+- FREE_ONLY boot invariants and tested Cost Guard.
+- ES256 short-lived Hub token verification, tenant/app binding and capability checks.
+- Deterministic privacy-first semantic router with runtime provider readiness.
+- Groq and Cloudflare Workers AI provider adapters.
+- Cloudflare Worker API with /health and /v1/run.
+- Cloudflare native tenant/user rate limiting.
+- D1 daily usage ledger and migration for provider quotas.
+- Metadata-only hashed observability traces.
+- Thin ecosystem SDK.
+- CI quality/security gates plus Wrangler deployment dry-run.
+- Gated production deployment workflow and branch-sync verifier.
+- Architecture/security/privacy/provider/task/RAG/runbook/release documentation.
 
 ## Not yet production claims
 
-Cloudflare Worker, D1/KV/R2/Vectorize/Queues, Hub token verification, App Check, provider credentials, live provider adapters, console, SDK publication, custom domain and production deploy are **not yet verified/deployed**.
+Worker runtime, auth, routing, provider adapters, D1 ledger and SDK are implemented but **not yet live-deployed**. A real Cloudflare D1 database ID, Worker secrets, Cloudflare deployment credentials, migrations, custom domain, App Check, RAG/Vectorize/R2/Queues, console, SDK publication and live provider smoke tests remain unverified. The placeholder D1 UUID in `wrangler.jsonc` must never be represented as provisioned.
 
 ## Canonical invariants
 
@@ -67,6 +75,13 @@ Groq GPT-OSS 120B/20B remain Production models and Free Plan limits were reconfi
 - **Files:** policy engine, env example, security tests, ADR-003.
 - **Migration:** none.
 - **Production:** not deployed.
+
+### 2026-10-06 — Architecture 1.2 core runtime
+- **Decision:** implement the secure execution path before console/RAG expansion.
+- **Reason:** prove auth, tenant isolation, privacy, free-only routing and provider boundaries before adding product surface area.
+- **Impact:** Worker API, Hub token verifier, Privacy Firewall, router, provider adapters, D1 ledger, Cost Guard, observability, SDK and release gates.
+- **Migration:** D1 migration `0001_usage.sql` is required once the real database is provisioned.
+- **Production:** not deployed; Cloudflare account gates remain.
 
 ### 2026-10-06 — Provider snapshot refreshed
 - **Decision:** retain Groq + Workers AI as initial base; keep Gemini Free restricted.
