@@ -92,7 +92,7 @@ export class NestAiClient {
   }
 
   private organizationId(): string {
-    if (this.options.organizationId) return this.organizationId();
+    if (this.options.organizationId) return this.options.organizationId;
     if (this.options.guest) return "public:" + this.options.appId;
     throw new NestAiError("SDK_ORGANIZATION_REQUIRED", 0);
   }
