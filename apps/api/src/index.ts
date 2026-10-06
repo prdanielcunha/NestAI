@@ -1,4 +1,4 @@
-import { TaskRequest, AudioInput, VisionInput, EmbeddingInput, ImageInput } from "../../../packages/contracts/src/index.js";
+import { TaskRequest, AudioInput, VisionInput, EmbeddingInput, ImageInput, RagQueryRequest, KnowledgeIngestRequest } from "../../../packages/contracts/src/index.js";
 import { verifyNestAiToken, requireCapability, readNestAiTokenHeader, type NestAiClaims } from "../../../packages/auth/src/index.js";
 import { verifyFirebaseAppCheckToken } from "../../../packages/app-check/src/index.js";
 import { classifyPrivacy } from "../../../packages/privacy-firewall/src/index.js";
@@ -34,6 +34,7 @@ import { createJob, enqueueJob, getJobForScope, getJobResult, nextAttempt, putJo
 import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit, controlPlaneRoutes, controlPlanePrompts, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota } from "../../../packages/control-plane/src/index.js";
 import { validateAppManifest, assertManifestTaskOwnership, persistAppManifest } from "../../../packages/app-manifest/src/index.js";
 import { verifyGitHubWorkloadToken } from "../../../packages/workload-auth/src/index.js";
+import { queryKnowledge, upsertKnowledge, persistKnowledgeSource, type VectorizeLike } from "../../../packages/rag/src/index.js";
 
 type RateLimiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
 
@@ -44,6 +45,7 @@ export type Env = {
   CACHE?: KvNamespaceLike;
   JOBS?: QueueLike<JobEnvelope>;
   JOBS_DLQ?: QueueLike<{ job: JobEnvelope; error: string }>;
+  VECTORIZE?: VectorizeLike;
   GROQ_API_KEY?: string;
   GEMINI_API_KEY?: string;
   MISTRAL_API_KEY?: string;
@@ -68,6 +70,8 @@ export type Env = {
   AI_MUSICSCALE_ENABLED?: "true" | "false";
   AI_HUB_ENABLED?: "true" | "false";
   AI_JOBS_ENABLED?: "true" | "false";
+  AI_VECTORIZE_ENABLED?: "true" | "false";
+  AI_R2_WRITES_ENABLED?: "true" | "false";
 };
 
 function json(body: unknown, status = 200): Response {
