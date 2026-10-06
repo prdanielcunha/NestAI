@@ -2,7 +2,7 @@ import type { RouteDecision } from "../../router/src/index.js";
 
 export type ProviderMessage = { role: "system" | "user" | "assistant"; content: string };
 export type GenerateRequest = { route: RouteDecision; messages: ProviderMessage[]; maxTokens?: number };
-export type GenerateResult = { text: string; provider: string; model: string; usage?: { inputTokens?: number; outputTokens?: number } };
+export type GenerateResult = { text: string; provider: string; model: string; usage?: { inputTokens: number | undefined; outputTokens: number | undefined } };
 
 export interface WorkersAiBinding {
   run(model: string, input: unknown, options?: unknown): Promise<unknown>;
