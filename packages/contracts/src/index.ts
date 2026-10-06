@@ -9,6 +9,6 @@ export type BillingMode = z.infer<typeof BillingMode>;
 export const TaskRequest = z.object({
   task: z.string().min(3),
   input: z.unknown(),
-  context: z.object({ organizationId: z.string().min(1).optional() }).default({})
+  context: z.object({ organizationId: z.string().min(1).optional(), locale: z.enum(["pt-BR","en","es"]).optional() }).default({})
 });
 export type TaskRequest = z.infer<typeof TaskRequest>;
