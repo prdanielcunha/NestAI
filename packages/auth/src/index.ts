@@ -5,6 +5,12 @@ export type NestAiClaims = {
   organizationId: string;
   appId: string;
   capabilities: string[];
+  scopes?: string[];
+  entitlements?: string[];
+  locale?: "pt-BR" | "en" | "es";
+  session?: string;
+  tokenType?: "user" | "service";
+  appCheckAppId?: string;
   iat: number;
   exp: number;
   nbf?: number;
