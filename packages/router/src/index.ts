@@ -24,6 +24,10 @@ export type RouteDecision = {
 };
 
 const preference: ModelId[] = [
+  "cloudflare:embeddinggemma-300m",
+  "cloudflare:whisper-large-v3-turbo",
+  "groq:whisper-large-v3-turbo",
+  "cloudflare:flux-1-schnell",
   "groq:gpt-oss-20b",
   "cloudflare:glm-4.7-flash",
   "groq:gpt-oss-120b",
@@ -32,9 +36,11 @@ const preference: ModelId[] = [
 ];
 
 function supportsModality(model: ModelDescriptor, modality: RouteRequest["modality"]): boolean {
-  if (modality === "text") return !model.audioIn;
+  if (modality === "text") return model.audioIn !== true && model.embedding !== true && model.imageOut !== true;
   if (modality === "vision") return model.vision === true;
   if (modality === "audio") return model.audioIn === true;
+  if (modality === "embedding") return model.embedding === true;
+  if (modality === "image") return model.imageOut === true;
   return false;
 }
 
