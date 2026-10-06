@@ -169,7 +169,8 @@ function OverviewPage({ locale, health, data }: { locale: Locale; health: api.He
           : <div className="quota-grid">
               {Object.entries(usage).map(([provider, raw]) => {
                 const item = raw;
-                const pct = item.hardLimit ? Math.max(0, Math.round((item.remaining / item.hardLimit) * 100)) : 0;
+                const remaining = item.remaining ?? 0;
+                const pct = item.hardLimit ? Math.max(0, Math.round((remaining / item.hardLimit) * 100)) : 0;
                 return (
                   <div className="quota-card" key={provider}>
                     <div className="quota-top"><strong>{provider}</strong><StatusPill>{item.quotaHealth}</StatusPill></div>
@@ -359,6 +360,8 @@ function EvaluationsPage({ data }: { data: api.EvaluationsData | null }) {
 }
 
 function ObservabilityPage({ data }: { data: api.ObservabilityData | null }) {
+  const providerHealth = data?.providerHealth ?? [];
+  const events = data?.events ?? [];
   return (
     <div className="page-grid">
       <PageIntro eyebrow="NO PRIVATE PAYLOADS" title="Observability" text="Request IDs, timings, outcomes, quota and fallback metadata without prompt/output logging." />
@@ -369,10 +372,10 @@ function ObservabilityPage({ data }: { data: api.ObservabilityData | null }) {
         <Metric label="Fallback rate" value="—" />
       </div>
       <Card title="Provider health" className="span-5">
-        {(data?.providerHealth ?? []).length ? <JsonPreview value={data.providerHealth} /> : <Empty text="Health samples will appear after the scheduled probe lands." />}
+        {providerHealth.length ? <JsonPreview value={providerHealth} /> : <Empty text="Health samples will appear after the scheduled probe lands." />}
       </Card>
       <Card title="Recent metadata events" className="span-7">
-        {(data?.events ?? []).length ? <JsonPreview value={data.events} /> : <Empty text="No metadata events today." />}
+        {events.length ? <JsonPreview value={events} /> : <Empty text="No metadata events today." />}
       </Card>
     </div>
   );
@@ -403,6 +406,7 @@ function PoliciesPage({ data }: { data: api.PoliciesData | null }) {
 }
 
 function CostPage({ locale, data }: { locale: Locale; data: api.CostData | null }) {
+  const usage = data?.usage ?? [];
   return (
     <div className="page-grid">
       <PageIntro eyebrow="ECONOMICS" title="Cost & Quota" text="Capacity is treated as a budget even while actual provider spend is zero." />
@@ -413,7 +417,7 @@ function CostPage({ locale, data }: { locale: Locale; data: api.CostData | null 
         <Metric label={tr(locale, "paidProviders")} value={tr(locale, "locked")} sub="FREE_ONLY hard lock" />
       </div>
       <Card title="Quota policies" className="span-5"><JsonPreview value={data?.policies ?? {}} /></Card>
-      <Card title="Usage dimensions" className="span-7">{(data?.usage ?? []).length ? <JsonPreview value={data.usage} /> : <Empty text="No usage rows today." />}</Card>
+      <Card title="Usage dimensions" className="span-7">{usage.length ? <JsonPreview value={usage} /> : <Empty text="No usage rows today." />}</Card>
     </div>
   );
 }
