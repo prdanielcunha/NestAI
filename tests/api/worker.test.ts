@@ -74,9 +74,19 @@ describe("Worker API", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       ok: true,
+      state: "operational",
       service: "nestai",
       billingMode: "FREE_ONLY",
       appCheck: "optional",
+      layers: {
+        edge: "ready",
+        auth: "ready",
+        config: "ready",
+        d1: "ready",
+        kv: "unconfigured",
+        queue: "unconfigured",
+        vectorize: "unconfigured",
+      },
       providers: {
         cloudflare: "ready",
         groq: "unconfigured",
