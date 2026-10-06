@@ -236,6 +236,13 @@ async function authenticateRequest(args: {
   });
   requireCapability(claims, args.task.capability);
 
+  if (claims.tokenType === "guest") {
+    if (claims.organizationId !== "public:" + args.task.app) throw new Error("AUTH_GUEST_TENANT_DENIED");
+    if (!["P0_PUBLIC", "P1_INTERNAL"].includes(args.task.defaultSensitivity)) {
+      throw new Error("AUTH_GUEST_SENSITIVITY_DENIED");
+    }
+  }
+
   if (claims.tokenType !== "service" && args.env.APP_CHECK_REQUIRED === "true") {
     const appCheckToken = args.request.headers.get("x-firebase-appcheck");
     if (!appCheckToken) throw new Error("APP_CHECK_REQUIRED");
