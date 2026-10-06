@@ -1615,6 +1615,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 }
 
 export async function handleScheduled(_controller: unknown, env: Env): Promise<void> {
+  await syncStaticControlPlane(env.DB);
   await evaluateSloAlerts(env.DB);
 }
 
