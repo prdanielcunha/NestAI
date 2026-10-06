@@ -443,6 +443,239 @@ async function safeCandidates(
   return quotaEligibleCandidates(env, prepared.claims, prepared.task, prepared.organizationId, candidates);
 }
 
+
+function serviceClaimsForJob(job: JobEnvelope): NestAiClaims {
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    iss: "nestai:queue",
+    aud: "nestai",
+    sub: "job:" + job.id,
+    organizationId: job.organizationId,
+    appId: job.appId,
+    capabilities: ["ai:run"],
+    scopes: ["ai:run"],
+    locale: job.locale,
+    tokenType: "service",
+    iat: now,
+    exp: now + 900,
+  };
+}
+
+async function executeJobEnvelope(env: Env, job: JobEnvelope): Promise<unknown> {
+  const task = getTask(job.task);
+  if (task.app !== job.appId) throw new Error("JOB_APP_TASK_MISMATCH");
+  assertKillSwitches(task, env);
+
+  const privacy = classifyPrivacy(job.payload, task.defaultSensitivity);
+  if (!privacy.externalAllowed) throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
+
+  const claims = serviceClaimsForJob(job);
+  const parsed = TaskRequest.parse({
+    task: task.id,
+    input: job.payload,
+    context: { organizationId: job.organizationId, locale: job.locale },
+  });
+  const prepared: PreparedTaskExecution = {
+    parsed,
+    task,
+    organizationId: job.organizationId,
+    claims,
+    sensitivity: privacy.sensitivity,
+    locale: job.locale,
+  };
+
+  if (task.modality === "text") {
+    const structured = getStructuredContract(task.id);
+    const candidates = await safeCandidates(env, prepared, "text", structured !== null);
+    const prompt = buildTaskPrompt({ taskId: task.id, locale: job.locale, input: job.payload });
+    const execution = await executeWithSafeFallback({
+      candidates,
+      keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
+      breaker,
+      maxRetriesPerCandidate: 1,
+      execute: async ({ candidate }) => {
+        await recordProviderAttempt(env, claims, task, job.organizationId, candidate.provider);
+        return withTimeout(
+          (signal) => generateForRoute(env, {
+            route: candidate,
+            messages: prompt.messages,
+            maxTokens: task.maxOutputTokens,
+            ...(structured ? { responseSchema: structured.jsonSchema } : {}),
+            signal,
+          }),
+          task.timeoutMs,
+        );
+      },
+    });
+    return validateStructuredText(task.id, execution.result.text);
+  }
+
+  if (task.modality === "audio") {
+    const input = AudioInput.parse(job.payload);
+    const candidates = await safeCandidates(env, prepared, "audio");
+    const execution = await executeWithSafeFallback({
+      candidates,
+      keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
+      breaker,
+      maxRetriesPerCandidate: 1,
+      execute: async ({ candidate }) => {
+        await recordProviderAttempt(env, claims, task, job.organizationId, candidate.provider);
+        if (candidate.provider === "cloudflare") {
+          return withTimeout(
+            () => transcribeWithCloudflare(env.AI, candidate.providerModelId, input.audioBase64, input.language),
+            task.timeoutMs,
+          );
+        }
+        if (candidate.provider === "groq") {
+          return withTimeout(
+            (signal) => transcribeWithGroq(env.GROQ_API_KEY ?? "", candidate.providerModelId, {
+              audioBase64: input.audioBase64,
+              mimeType: input.mimeType,
+              ...(input.fileName ? { fileName: input.fileName } : {}),
+              ...(input.language ? { language: input.language } : {}),
+              signal,
+            }),
+            task.timeoutMs,
+          );
+        }
+        throw new Error("PROVIDER_MODALITY_UNSUPPORTED");
+      },
+    });
+    return execution.result;
+  }
+
+  if (task.modality === "vision") {
+    const input = VisionInput.parse(job.payload);
+    await recordProviderAttempt(env, claims, task, job.organizationId, "cloudflare");
+    const converted = await withTimeout(
+      () => extractDocumentTextWithCloudflare(env.AI, {
+        base64: input.fileBase64,
+        mimeType: input.mimeType,
+        fileName: input.fileName,
+        locale: job.locale,
+      }),
+      Math.min(task.timeoutMs, 25_000),
+    );
+    const structured = getStructuredContract(task.id);
+    const candidates = await safeCandidates(env, prepared, "text", structured !== null);
+    const prompt = buildTaskPrompt({
+      taskId: task.id,
+      locale: job.locale,
+      input: { extractedText: converted.text },
+    });
+    const execution = await executeWithSafeFallback({
+      candidates,
+      keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
+      breaker,
+      maxRetriesPerCandidate: 1,
+      execute: async ({ candidate }) => {
+        await recordProviderAttempt(env, claims, task, job.organizationId, candidate.provider);
+        return withTimeout(
+          (signal) => generateForRoute(env, {
+            route: candidate,
+            messages: prompt.messages,
+            maxTokens: task.maxOutputTokens,
+            ...(structured ? { responseSchema: structured.jsonSchema } : {}),
+            signal,
+          }),
+          task.timeoutMs,
+        );
+      },
+    });
+    return validateStructuredText(task.id, execution.result.text);
+  }
+
+  if (task.modality === "embedding") {
+    const input = EmbeddingInput.parse(job.payload);
+    const [candidate] = await safeCandidates(env, prepared, "embedding");
+    if (!candidate || candidate.provider !== "cloudflare") throw new Error("ROUTER_NO_ELIGIBLE_MODEL");
+    await recordProviderAttempt(env, claims, task, job.organizationId, candidate.provider);
+    const vectors = await withTimeout(
+      () => embedWithCloudflare(env.AI, candidate.providerModelId, input.texts),
+      task.timeoutMs,
+    );
+    return { vectors, dimensions: vectors[0]?.length ?? 0 };
+  }
+
+  if (task.modality === "image") {
+    const input = ImageInput.parse(job.payload);
+    const [candidate] = await safeCandidates(env, prepared, "image");
+    if (!candidate || candidate.provider !== "cloudflare") throw new Error("ROUTER_NO_ELIGIBLE_MODEL");
+    const imageUsage = await getDimensionalUsage(env.DB, {
+      scopeType: "provider",
+      scopeId: candidate.provider,
+      provider: candidate.provider,
+      task: task.id,
+    });
+    if (imageUsage.provider_calls >= 20) throw new Error("COST_GUARD_IMAGE_DAILY_LIMIT");
+    await recordProviderAttempt(env, claims, task, job.organizationId, candidate.provider);
+    return withTimeout(
+      () => generateImageWithCloudflare(env.AI, candidate.providerModelId, {
+        prompt: input.prompt,
+        ...(input.steps !== undefined ? { steps: input.steps } : {}),
+        ...(input.seed !== undefined ? { seed: input.seed } : {}),
+      }),
+      task.timeoutMs,
+    );
+  }
+
+  throw new Error("JOB_MODALITY_UNSUPPORTED");
+}
+
+type QueueMessageLike<T> = {
+  body: T;
+  ack(): void;
+};
+
+type QueueBatchLike<T> = {
+  messages: Array<QueueMessageLike<T>>;
+};
+
+export async function handleQueueBatch(batch: QueueBatchLike<JobEnvelope>, env: Env): Promise<void> {
+  for (const message of batch.messages) {
+    const job = message.body;
+    try {
+      await updateJobStatus(env.DB, job.id, "running", job.attempt, { payloadStored: false });
+      const result = await executeJobEnvelope(env, job);
+      if (!env.CACHE) throw new Error("JOB_RESULT_STORE_UNAVAILABLE");
+      await putJobResult(env.CACHE, {
+        jobId: job.id,
+        organizationId: job.organizationId,
+        appId: job.appId,
+        result,
+        ttlSeconds: 3600,
+      });
+      await updateJobStatus(env.DB, job.id, "succeeded", job.attempt, {
+        payloadStored: false,
+        resultStored: true,
+        resultTtlSeconds: 3600,
+      });
+      message.ack();
+    } catch (error) {
+      const code = errorCode(error);
+      try {
+        const retryJob = nextAttempt(job);
+        if (!env.JOBS) throw new Error("JOB_QUEUE_UNAVAILABLE");
+        await env.JOBS.send(retryJob, { delaySeconds: retryDelaySeconds(retryJob.attempt) });
+        await updateJobStatus(env.DB, job.id, "queued", retryJob.attempt, {
+          payloadStored: false,
+          lastError: code,
+          retryScheduled: true,
+        });
+      } catch {
+        await updateJobStatus(env.DB, job.id, "dead_lettered", job.attempt, {
+          payloadStored: false,
+          lastError: code,
+        });
+        if (env.JOBS_DLQ) {
+          await env.JOBS_DLQ.send({ job, error: code });
+        }
+      }
+      message.ack();
+    }
+  }
+}
+
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
 
