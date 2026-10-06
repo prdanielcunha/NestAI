@@ -302,7 +302,7 @@ async function streamForRoute(env: Env, request: GenerateRequest): Promise<Async
 
 async function emitTrace(env: Env, trace: Awaited<ReturnType<typeof safeTrace>>): Promise<void> {
   await persistTrace(env.DB, trace);
-  await emitTrace(env, trace);
+  console.log(JSON.stringify(trace));
 }
 
 function sse(event: string, data: unknown): Uint8Array {
