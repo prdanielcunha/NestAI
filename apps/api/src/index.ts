@@ -893,6 +893,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     const raw = await request.json();
     const parsed = TaskRequest.parse(raw);
     const task = getTask(parsed.task);
+    if (task.modality !== "text") throw new Error("USE_MODALITY_ENDPOINT");
     assertKillSwitches(task, env);
 
     const organizationId = parsed.context.organizationId;
