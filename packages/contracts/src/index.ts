@@ -46,3 +46,27 @@ export const ImageInput = z.object({
   seed: z.number().int().min(0).max(2_147_483_647).optional(),
 });
 export type ImageInput = z.infer<typeof ImageInput>;
+
+
+export const RagQueryRequest = z.object({
+  task: z.string().min(1),
+  query: z.string().min(1).max(20_000),
+  topK: z.number().int().min(1).max(20).optional(),
+  context: z.object({
+    organizationId: z.string().min(1),
+    locale: z.enum(["pt-BR","en","es"]).default("pt-BR"),
+  }),
+});
+export type RagQueryRequest = z.infer<typeof RagQueryRequest>;
+
+export const KnowledgeIngestRequest = z.object({
+  sourceId: z.string().min(3).max(160).regex(/^[a-zA-Z0-9._:-]+$/),
+  appId: z.string().min(2).max(64),
+  organizationId: z.string().min(1).max(160),
+  sensitivity: z.enum(["P0_PUBLIC","P1_INTERNAL","P2_PERSONAL","P3_SENSITIVE"]),
+  locale: z.enum(["pt-BR","en","es"]).default("pt-BR"),
+  title: z.string().min(1).max(240).optional(),
+  locatorPrefix: z.string().min(1).max(500).optional(),
+  text: z.string().min(1).max(500_000),
+});
+export type KnowledgeIngestRequest = z.infer<typeof KnowledgeIngestRequest>;
