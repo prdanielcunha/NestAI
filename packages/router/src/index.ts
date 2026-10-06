@@ -8,6 +8,7 @@ export type RouteRequest = {
   modality: "text" | "vision" | "audio" | "image" | "embedding";
   allowedProviders: string[];
   blockedProviders: string[];
+  availableProviders?: string[];
   needsTools?: boolean;
   needsReasoning?: boolean;
 };
@@ -44,6 +45,7 @@ export function routeModel(request: RouteRequest): RouteDecision {
     const model: ModelDescriptor = models[modelId];
     if (model.status !== "production") continue;
     if (!request.allowedProviders.includes(model.provider)) continue;
+    if (request.availableProviders && !request.availableProviders.includes(model.provider)) continue;
     if (request.blockedProviders.includes(model.provider)) continue;
     if (!supportsModality(model, request.modality)) continue;
     if (request.needsTools && model.tools !== true) continue;
