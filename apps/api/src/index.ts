@@ -324,6 +324,7 @@ async function recordProviderAttempt(
     incrementUsage(env.DB, organizationId, provider),
     incrementDimensionalUsage(env.DB, [
       { scopeType: "provider", scopeId: provider, provider },
+      { scopeType: "provider", scopeId: provider, provider, task: task.id },
       { scopeType: "app", scopeId: task.app, provider },
       { scopeType: "organization", scopeId: organizationId, provider },
       { scopeType: "user", scopeId: claims.sub, provider },
