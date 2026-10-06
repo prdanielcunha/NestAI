@@ -11,6 +11,7 @@ function baseEnv(): Env {
           bind: vi.fn(),
           first: vi.fn(async () => null),
           run: vi.fn(async () => ({})),
+          all: vi.fn(async () => ({ results: [] })),
         };
         statement.bind.mockReturnValue(statement);
         return statement;
@@ -32,6 +33,13 @@ function baseEnv(): Env {
     AI_FINANCE_ENABLED: "true",
     AI_NESTLUME_ENABLED: "true",
     AI_NESTAFFILIATE_ENABLED: "true",
+    AI_NESTLOCAL_ENABLED: "true",
+    AI_NESTJOURNEY_ENABLED: "true",
+    AI_MUSICSCALE_ENABLED: "true",
+    AI_HUB_ENABLED: "true",
+    AI_JOBS_ENABLED: "false",
+    AI_VECTORIZE_ENABLED: "false",
+    AI_R2_WRITES_ENABLED: "false",
   };
 }
 
