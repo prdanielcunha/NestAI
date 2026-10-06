@@ -9,6 +9,10 @@ import {
   generateWithGemini,
   generateWithGroq,
   generateWithMistral,
+  streamWithCloudflare,
+  streamWithGemini,
+  streamWithGroq,
+  streamWithMistral,
   type GenerateRequest,
   type GenerateResult,
   type WorkersAiBinding,
@@ -172,6 +176,38 @@ async function generateForRoute(env: Env, request: GenerateRequest): Promise<Gen
   throw new Error("PROVIDER_NOT_IMPLEMENTED");
 }
 
+async function streamForRoute(env: Env, request: GenerateRequest): Promise<AsyncIterable<string>> {
+  if (request.route.provider === "cloudflare") return streamWithCloudflare(env.AI, request);
+  if (request.route.provider === "groq") return streamWithGroq(env.GROQ_API_KEY ?? "", request);
+  if (request.route.provider === "gemini") return streamWithGemini(env.GEMINI_API_KEY ?? "", request);
+  if (request.route.provider === "mistral") return streamWithMistral(env.MISTRAL_API_KEY ?? "", request);
+  throw new Error("PROVIDER_NOT_IMPLEMENTED");
+}
+
+function sse(event: string, data: unknown): Uint8Array {
+  return new TextEncoder().encode("event: " + event + "\ndata: " + JSON.stringify(data) + "\n\n");
+}
+
+async function nextWithDeadline<T>(
+  iterator: AsyncIterator<T>,
+  deadlineMs: number,
+  signal: AbortSignal,
+): Promise<IteratorResult<T>> {
+  if (signal.aborted) throw new Error("CLIENT_ABORTED");
+  const remaining = deadlineMs - Date.now();
+  if (remaining <= 0) throw new Error("PROVIDER_TIMEOUT");
+  return Promise.race([
+    iterator.next(),
+    new Promise<IteratorResult<T>>((_, reject) => {
+      const timer = setTimeout(() => reject(new Error("PROVIDER_TIMEOUT")), remaining);
+      signal.addEventListener("abort", () => {
+        clearTimeout(timer);
+        reject(new Error("CLIENT_ABORTED"));
+      }, { once: true });
+    }),
+  ]);
+}
+
 async function quotaEligibleCandidates(env: Env, organizationId: string, candidates: RouteDecision[]): Promise<RouteDecision[]> {
   const eligible: RouteDecision[] = [];
   for (const candidate of candidates) {
@@ -206,6 +242,147 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         mistral: env.MISTRAL_API_KEY ? "lab" : "unconfigured",
       },
     });
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/chat/stream") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    const started = Date.now();
+
+    try {
+      const raw = await request.json();
+      const parsed = TaskRequest.parse(raw);
+      const task = getTask(parsed.task);
+      assertKillSwitches(task, env);
+      if (!task.streaming) throw new Error("STREAM_NOT_ALLOWED_FOR_TASK");
+      if (getStructuredContract(task.id)) throw new Error("STREAM_STRUCTURED_OUTPUT_UNSUPPORTED");
+
+      const organizationId = parsed.context.organizationId;
+      if (!organizationId) throw new Error("AUTH_TENANT_REQUIRED");
+
+      const claims = await authenticateRequest({ request, env, task, organizationId });
+      requireCapability(claims, "ai:stream");
+
+      const rate = await env.AI_RATE_LIMITER.limit({ key: claims.organizationId + ":" + claims.sub });
+      if (!rate.success) throw new Error("RATE_LIMITED");
+
+      const privacy = classifyPrivacy(parsed.input, task.defaultSensitivity);
+      if (!privacy.externalAllowed) throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
+
+      const candidates = routeCandidates({
+        sensitivity: privacy.sensitivity,
+        billingMode: env.AI_BILLING_MODE,
+        modality: task.modality,
+        allowedProviders: task.allowedProviders,
+        blockedProviders: task.blockedProviders,
+        availableProviders: availableProviders(env),
+      });
+      if (candidates.length === 0) throw new Error("ROUTER_NO_ELIGIBLE_MODEL");
+
+      const quotaCandidates = await quotaEligibleCandidates(env, organizationId, candidates);
+      const locale = (parsed.context.locale ?? claims.locale ?? "pt-BR") as Locale;
+      const prompt = buildTaskPrompt({ taskId: task.id, locale, input: parsed.input });
+
+      const execution = await executeWithSafeFallback({
+        candidates: quotaCandidates,
+        keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
+        breaker,
+        maxRetriesPerCandidate: 1,
+        execute: async ({ candidate }) => {
+          await incrementUsage(env.DB, organizationId, candidate.provider);
+          return withTimeout(
+            (signal) => streamForRoute(env, {
+              route: candidate,
+              messages: prompt.messages,
+              maxTokens: task.maxOutputTokens,
+              signal,
+            }),
+            Math.min(task.timeoutMs, 5_000),
+          );
+        },
+      });
+
+      const upstream = execution.result[Symbol.asyncIterator]();
+      const deadline = Date.now() + task.timeoutMs;
+      let firstDeltaAt: number | undefined;
+      let completed = false;
+
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(sse("start", {
+            requestId,
+            task: task.id,
+            version: task.version,
+          }));
+
+          void (async () => {
+            try {
+              while (true) {
+                const item = await nextWithDeadline(upstream, deadline, request.signal);
+                if (item.done) break;
+                if (firstDeltaAt === undefined) firstDeltaAt = Date.now();
+                controller.enqueue(sse("delta", { text: item.value }));
+              }
+
+              controller.enqueue(sse("usage", {
+                providerClass: "free",
+                fallbackUsed: execution.fallbackUsed,
+                retries: execution.retries,
+              }));
+              controller.enqueue(sse("complete", { requestId }));
+              completed = true;
+
+              const trace = await safeTrace({
+                traceId: requestId,
+                task: task.id,
+                appId: task.app,
+                organizationId,
+                sensitivity: privacy.sensitivity,
+                provider: execution.candidate.provider,
+                model: execution.candidate.providerModelId,
+                promptVersion: prompt.promptVersion,
+                durationMs: Date.now() - started,
+                ttftMs: firstDeltaAt === undefined ? undefined : firstDeltaAt - started,
+                fallbackUsed: execution.fallbackUsed,
+                retries: execution.retries,
+                cached: false,
+                outputValidation: "not_required",
+                toolUsage: false,
+                outcome: "success",
+              });
+              console.log(JSON.stringify(trace));
+              controller.close();
+            } catch (error) {
+              const code = errorCode(error);
+              controller.enqueue(sse("error", { requestId, error: code }));
+              console.error(JSON.stringify({ requestId, code, durationMs: Date.now() - started, streaming: true }));
+              controller.close();
+            } finally {
+              if (!completed && upstream.return) {
+                try { await upstream.return(); } catch { /* best effort cancellation */ }
+              }
+            }
+          })();
+        },
+        async cancel() {
+          if (upstream.return) {
+            try { await upstream.return(); } catch { /* best effort cancellation */ }
+          }
+        },
+      });
+
+      return new Response(body, {
+        status: 200,
+        headers: {
+          "content-type": "text/event-stream; charset=utf-8",
+          "cache-control": "no-cache, no-transform",
+          "x-content-type-options": "nosniff",
+        },
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      console.error(JSON.stringify({ requestId, code, durationMs: Date.now() - started, streaming: true }));
+      return json({ requestId, error: code }, statusFor(code));
+    }
   }
 
   if (request.method !== "POST" || url.pathname !== "/v1/run") return json({ error: "NOT_FOUND" }, 404);
