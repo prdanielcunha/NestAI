@@ -1,0 +1,428 @@
+{
+  "schemaVersion": 1,
+  "taskId": "finance.receipt.extract",
+  "version": 1,
+  "sanitized": true,
+  "cases": [
+    {
+      "id": "finance-receipt-pt-01",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 1\nEstabelecimento: Mercado Exemplo\nValor: R$ 20.00\nData: 06/10/2026\nDocumento: TESTE-1000"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-02",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 2\nEstabelecimento: Mercado Exemplo\nValor: R$ 23.00\nData: 06/10/2026\nDocumento: TESTE-1001"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-03",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 3\nEstabelecimento: Mercado Exemplo\nValor: R$ 26.00\nData: 06/10/2026\nDocumento: TESTE-1002"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-04",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 4\nEstabelecimento: Mercado Exemplo\nValor: R$ 29.00\nData: 06/10/2026\nDocumento: TESTE-1003"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-05",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 5\nEstabelecimento: Mercado Exemplo\nValor: R$ 32.00\nData: 06/10/2026\nDocumento: TESTE-1004"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-06",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 6\nEstabelecimento: Mercado Exemplo\nValor: R$ 35.00\nData: 06/10/2026\nDocumento: TESTE-1005"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-07",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 7\nEstabelecimento: Mercado Exemplo\nValor: R$ 38.00\nData: 06/10/2026\nDocumento: TESTE-1006"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-08",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 8\nEstabelecimento: Mercado Exemplo\nValor: R$ 41.00\nData: 06/10/2026\nDocumento: TESTE-1007"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-09",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 9\nEstabelecimento: Mercado Exemplo\nValor: R$ 44.00\nData: 06/10/2026\nDocumento: TESTE-1008"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-10",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 10\nEstabelecimento: Mercado Exemplo\nValor: R$ 47.00\nData: 06/10/2026\nDocumento: TESTE-1009"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-11",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 11\nEstabelecimento: Mercado Exemplo\nValor: R$ 50.00\nData: 06/10/2026\nDocumento: TESTE-1010"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-12",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 12\nEstabelecimento: Mercado Exemplo\nValor: R$ 53.00\nData: 06/10/2026\nDocumento: TESTE-1011"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-13",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 13\nEstabelecimento: Mercado Exemplo\nValor: R$ 56.00\nData: 06/10/2026\nDocumento: TESTE-1012"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-14",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 14\nEstabelecimento: Mercado Exemplo\nValor: R$ 59.00\nData: 06/10/2026\nDocumento: TESTE-1013"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-15",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 15\nEstabelecimento: Mercado Exemplo\nValor: R$ 62.00\nData: 06/10/2026\nDocumento: TESTE-1014"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-16",
+      "taskId": "finance.receipt.extract",
+      "locale": "pt-BR",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 16\nEstabelecimento: Mercado Exemplo\nValor: R$ 65.00\nData: 06/10/2026\nDocumento: TESTE-1015"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-17",
+      "taskId": "finance.receipt.extract",
+      "locale": "en",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 17\nEstabelecimento: Mercado Exemplo\nValor: R$ 68.00\nData: 06/10/2026\nDocumento: TESTE-1016"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-18",
+      "taskId": "finance.receipt.extract",
+      "locale": "en",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 18\nEstabelecimento: Mercado Exemplo\nValor: R$ 71.00\nData: 06/10/2026\nDocumento: TESTE-1017"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-19",
+      "taskId": "finance.receipt.extract",
+      "locale": "es",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 19\nEstabelecimento: Mercado Exemplo\nValor: R$ 74.00\nData: 06/10/2026\nDocumento: TESTE-1018"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    },
+    {
+      "id": "finance-receipt-pt-20",
+      "taskId": "finance.receipt.extract",
+      "locale": "es",
+      "sensitivity": "P3_SENSITIVE",
+      "input": {
+        "syntheticReceipt": "COMPROVANTE TESTE 20\nEstabelecimento: Mercado Exemplo\nValor: R$ 77.00\nData: 06/10/2026\nDocumento: TESTE-1019"
+      },
+      "expected": {
+        "merchant": "Mercado Exemplo",
+        "currency": "BRL",
+        "date": "06/10/2026"
+      },
+      "forbiddenSubstrings": [
+        "inventado",
+        "aprovação automática",
+        "lançamento efetuado"
+      ],
+      "maxLatencyMs": 8000,
+      "sanitized": true
+    }
+  ]
+}
