@@ -1614,4 +1614,8 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   }
 }
 
-export default { fetch: handleRequest, queue: handleQueueBatch };
+export async function handleScheduled(_controller: unknown, env: Env): Promise<void> {
+  await evaluateSloAlerts(env.DB);
+}
+
+export default { fetch: handleRequest, queue: handleQueueBatch, scheduled: handleScheduled };
