@@ -6,7 +6,16 @@ export type TraceEvent = {
   sensitivity: string;
   provider?: string;
   model?: string;
+  promptVersion?: number;
   durationMs?: number;
+  ttftMs?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  fallbackUsed?: boolean;
+  retries?: number;
+  cached?: boolean;
+  outputValidation?: "not_required" | "passed" | "failed";
+  toolUsage?: boolean;
   outcome: "started" | "success" | "rejected" | "error";
   errorCode?: string;
 };
