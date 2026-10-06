@@ -12,7 +12,8 @@
     "firebase": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "vite": "latest"
+    "vite": "latest",
+    "@millionsnest/ai": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "latest",
