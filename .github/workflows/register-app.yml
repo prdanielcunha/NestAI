@@ -1,0 +1,36 @@
+name: NestAI App Registration
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('millionsnest.app.json','utf8')); if(!x.appId||!x.owner?.repository) process.exit(1); console.log('NESTAI_MANIFEST_OK')"
+      - name: Obtain workload identity
+        id: oidc
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const token = await core.getIDToken('nestai-app-register');
+            core.setSecret(token);
+            core.setOutput('token', token);
+      - name: Register with NestAI
+        shell: bash
+        env:
+          NESTAI_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error             -X POST             -H "Authorization: Bearer $NESTAI_OIDC_TOKEN"             -H "Content-Type: application/json"             --data-binary @millionsnest.app.json             https://ai.millionsnest.com/v1/apps/register
+          echo
