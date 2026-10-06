@@ -20,3 +20,4 @@ jobs:
       - run: pnpm test
       - run: pnpm test:security
       - run: pnpm build
+      - run: pnpm deploy:dry
