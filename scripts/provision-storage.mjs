@@ -41,7 +41,7 @@ function createIfMissing(args, label) {
   } catch (error) {
     const stderr=String(error?.stderr??"");
     const stdout=String(error?.stdout??"");
-    if (/already exists|already been taken|duplicate/i.test(stderr+"\n"+stdout)) {
+    if (/already exists|already been taken|already taken|is already taken|duplicate/i.test(stderr+"\n"+stdout)) {
       console.log(label+"_REUSED=true");
       return;
     }
