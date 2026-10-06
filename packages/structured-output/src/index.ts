@@ -65,7 +65,7 @@ export function getStructuredContract(taskId: string): StructuredContract | null
 
 function stripCodeFence(text: string): string {
   const trimmed = text.trim();
-  const match = trimmed.match(/^\`\`\`(?:json)?\s*([\s\S]*?)\s*\`\`\`$/i);
+  const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   return match?.[1]?.trim() ?? trimmed;
 }
 
