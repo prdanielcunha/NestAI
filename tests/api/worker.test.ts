@@ -93,7 +93,7 @@ describe("Worker API", () => {
         d1: "ready",
         kv: "unconfigured",
         queue: "unconfigured",
-        vectorize: "unconfigured",
+        vectorize: "blocked",
       },
       providers: {
         cloudflare: "ready",
