@@ -48,7 +48,7 @@ function promptFrom(input: unknown): string {
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/health") {
-    return json({ ok: true, service: "nestai", billingMode: env.AI_BILLING_MODE });
+    return json({ ok: true, service: "nestai", billingMode: env.AI_BILLING_MODE, providers: { cloudflare: "ready", groq: env.GROQ_API_KEY ? "ready" : "unconfigured" } });
   }
   if (request.method !== "POST" || url.pathname !== "/v1/run") return json({ error: "NOT_FOUND" }, 404);
 
@@ -86,6 +86,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       modality: task.modality,
       allowedProviders: task.allowedProviders,
       blockedProviders: task.blockedProviders,
+      availableProviders: env.GROQ_API_KEY ? ["groq", "cloudflare"] : ["cloudflare"],
     });
 
     const usage = await getUsage(env.DB, organizationId, route.provider);
