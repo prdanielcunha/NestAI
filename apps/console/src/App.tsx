@@ -362,19 +362,32 @@ function EvaluationsPage({ data }: { data: api.EvaluationsData | null }) {
 function ObservabilityPage({ data }: { data: api.ObservabilityData | null }) {
   const providerHealth = data?.providerHealth ?? [];
   const events = data?.events ?? [];
+  const traces = data?.traces ?? [];
+  const alerts = data?.alerts ?? [];
+  const incidents = data?.incidents ?? [];
+  const slo = data?.slo;
+  const percent = (value: number | undefined) => value === undefined ? "—" : (value * 100).toFixed(2) + "%";
   return (
     <div className="page-grid">
       <PageIntro eyebrow="NO PRIVATE PAYLOADS" title="Observability" text="Request IDs, timings, outcomes, quota and fallback metadata without prompt/output logging." />
       <div className="metrics-grid span-12">
-        <Metric label="Events today" value={data?.totalEvents ?? "—"} />
-        <Metric label="p50 latency" value="—" />
-        <Metric label="p95 latency" value="—" />
-        <Metric label="Fallback rate" value="—" />
+        <Metric label="Requests traced" value={slo?.totalRequests ?? "—"} />
+        <Metric label="p95 latency" value={slo?.p95Ms === undefined ? "—" : slo.p95Ms + " ms"} />
+        <Metric label="Fallback rate" value={percent(slo?.fallbackRate)} />
+        <Metric label="Schema failures" value={percent(slo?.schemaFailureRate)} />
       </div>
-      <Card title="Provider health" className="span-5">
-        {providerHealth.length ? <JsonPreview value={providerHealth} /> : <Empty text="Health samples will appear after the scheduled probe lands." />}
+      <Card title="Provider health" eyebrow="LAST 100 SAMPLES" className="span-5">
+        {providerHealth.length ? <JsonPreview value={providerHealth} /> : <Empty text="Health samples will appear after provider traffic lands." />}
       </Card>
-      <Card title="Recent metadata events" className="span-7">
+      <Card title="Active alerts & incidents" eyebrow="SLO AUTOMATION" className="span-7">
+        {(alerts.length || incidents.length)
+          ? <JsonPreview value={{ alerts, incidents }} />
+          : <Empty text="No SLO alert or incident is currently recorded." />}
+      </Card>
+      <Card title="Recent traces" eyebrow="REQUEST ID" className="span-7">
+        {traces.length ? <JsonPreview value={traces} /> : <Empty text="No privacy-safe trace has been persisted today." />}
+      </Card>
+      <Card title="Metadata events" eyebrow="POLICY / RATE" className="span-5">
         {events.length ? <JsonPreview value={events} /> : <Empty text="No metadata events today." />}
       </Card>
     </div>
