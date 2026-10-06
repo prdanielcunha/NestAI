@@ -448,7 +448,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         repositoryOwner: "prdanielcunha",
         expectedRepository: manifest.owner.repository,
       });
-      await persistAppManifest(env.DB, manifest, { ref: claims.ref, sha: claims.sha });
+      await persistAppManifest(env.DB, manifest, { ...(claims.ref ? { ref: claims.ref } : {}), ...(claims.sha ? { sha: claims.sha } : {}) });
       return json({
         requestId,
         registered: true,
@@ -512,8 +512,8 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
               (signal) => transcribeWithGroq(env.GROQ_API_KEY ?? "", candidate.providerModelId, {
                 audioBase64: input.audioBase64,
                 mimeType: input.mimeType,
-                fileName: input.fileName,
-                language: input.language,
+                ...(input.fileName ? { fileName: input.fileName } : {}),
+                ...(input.language ? { language: input.language } : {}),
                 signal,
               }),
               prepared.task.timeoutMs,
@@ -703,7 +703,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
       await recordProviderAttempt(env, prepared.claims, prepared.task, prepared.organizationId, candidate.provider);
       const result = await withTimeout(
-        () => generateImageWithCloudflare(env.AI, candidate.providerModelId, input),
+        () => generateImageWithCloudflare(env.AI, candidate.providerModelId, { prompt: input.prompt, ...(input.steps !== undefined ? { steps: input.steps } : {}), ...(input.seed !== undefined ? { seed: input.seed } : {}) }),
         prepared.task.timeoutMs,
       );
       const trace = await safeTrace({
