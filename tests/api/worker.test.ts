@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { handleRequest, type Env } from "../../apps/api/src/index.js";
+import { handleRequest, resetHubJwksCacheForTests, type Env } from "../../apps/api/src/index.js";
 
 function baseEnv(): Env {
   return {
@@ -99,6 +99,7 @@ describe("Worker API", () => {
 
 
   it("executes an authenticated tenant-scoped task through JWKS and Workers AI", async () => {
+    resetHubJwksCacheForTests();
     const { token, publicJwk } = await issueWorkerToken();
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
       keys: [publicJwk],
