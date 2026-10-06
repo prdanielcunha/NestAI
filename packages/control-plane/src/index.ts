@@ -3,6 +3,9 @@ import { tasks } from "../../task-registry/src/index.js";
 import { models } from "../../model-registry/src/index.js";
 import { providers } from "../../provider-registry/src/index.js";
 import { providerFreeQuota, quotaHealth } from "../../cost-guard/src/index.js";
+import { routeCandidates } from "../../router/src/index.js";
+import { prompts } from "../../prompt-registry/src/index.js";
+import { getStructuredContract } from "../../structured-output/src/index.js";
 import type { D1DatabaseLike } from "../../usage-ledger/src/index.js";
 
 function utcDay(now = new Date()): string {
@@ -97,4 +100,92 @@ export async function controlPlaneAudit(db: D1DatabaseLike, limit = 100) {
     "SELECT event_id, actor_hash, action, resource_type, resource_id, environment, metadata_json, created_at FROM cp_audit_events ORDER BY created_at DESC LIMIT ?1"
   ).bind(safeLimit).all<Record<string, unknown>>();
   return rows.results ?? [];
+}
+
+
+export function controlPlaneRoutes() {
+  return tasks.map((task) => {
+    const candidates = routeCandidates({
+      sensitivity: task.defaultSensitivity,
+      billingMode: "FREE_ONLY",
+      modality: task.modality,
+      allowedProviders: task.allowedProviders,
+      blockedProviders: task.blockedProviders,
+      availableProviders: task.allowedProviders,
+      needsStructuredOutput: getStructuredContract(task.id) !== null,
+    });
+    return {
+      id: task.id + ":route",
+      task: task.id,
+      version: 1,
+      sensitivity: task.defaultSensitivity,
+      freeOnly: true,
+      candidates,
+      primary: candidates[0] ?? null,
+      fallback: candidates[1] ?? null,
+    };
+  });
+}
+
+export function controlPlanePrompts() {
+  return Object.values(prompts).map((prompt) => ({
+    id: prompt.id,
+    taskId: prompt.taskId,
+    version: prompt.version,
+    locales: Object.keys(prompt.instructions),
+    hasStructuredOutput: getStructuredContract(prompt.taskId) !== null,
+    systemPolicyPreview: prompt.systemPolicy.slice(0, 180),
+  }));
+}
+
+export async function controlPlaneKnowledge(db: D1DatabaseLike) {
+  const [sources, indexes] = await Promise.all([
+    db.prepare(
+      "SELECT source_id, app_id, organization_id_hash, sensitivity, locale, status, metadata_json, updated_at FROM cp_knowledge_sources ORDER BY updated_at DESC LIMIT 200"
+    ).all<Record<string, unknown>>(),
+    db.prepare(
+      "SELECT index_id, source_id, version, status, chunks, metadata_json, updated_at FROM cp_knowledge_indexes ORDER BY updated_at DESC LIMIT 200"
+    ).all<Record<string, unknown>>(),
+  ]);
+  return { sources: sources.results ?? [], indexes: indexes.results ?? [] };
+}
+
+export async function controlPlaneEvaluations(db: D1DatabaseLike) {
+  const [suites, runs] = await Promise.all([
+    db.prepare(
+      "SELECT suite_id, task_id, name, status, updated_at FROM cp_eval_suites ORDER BY updated_at DESC LIMIT 100"
+    ).all<Record<string, unknown>>(),
+    db.prepare(
+      "SELECT run_id, suite_id, target_json, score, passed, report_json, created_at FROM cp_eval_runs ORDER BY created_at DESC LIMIT 100"
+    ).all<Record<string, unknown>>(),
+  ]);
+  return { suites: suites.results ?? [], runs: runs.results ?? [] };
+}
+
+export async function controlPlaneObservability(db: D1DatabaseLike, now = new Date()) {
+  const day = utcDay(now);
+  const [events, health, total] = await Promise.all([
+    db.prepare(
+      "SELECT id, event_type, app_id, provider, task, organization_hash, created_at FROM runtime_events WHERE day = ?1 ORDER BY created_at DESC LIMIT 200"
+    ).bind(day).all<Record<string, unknown>>(),
+    db.prepare(
+      "SELECT provider_id, state, success_rate, p50_ms, p95_ms, circuit_state, checked_at FROM cp_provider_health ORDER BY provider_id"
+    ).all<Record<string, unknown>>(),
+    scalar(db, "SELECT COUNT(*) AS value FROM runtime_events WHERE day = ?1", day),
+  ]);
+  return { day, totalEvents: total, events: events.results ?? [], providerHealth: health.results ?? [] };
+}
+
+export async function controlPlaneCostQuota(db: D1DatabaseLike, now = new Date()) {
+  const day = utcDay(now);
+  const rows = await db.prepare(
+    "SELECT scope_type, scope_id, provider, task, requests, provider_calls FROM daily_usage_dimensions WHERE day = ?1 ORDER BY provider_calls DESC LIMIT 500"
+  ).bind(day).all<Record<string, unknown>>();
+  return {
+    day,
+    actualSpendBrl: 0,
+    paidProvidersLocked: true,
+    policies: providerFreeQuota,
+    usage: rows.results ?? [],
+  };
 }
