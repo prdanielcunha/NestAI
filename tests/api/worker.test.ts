@@ -138,6 +138,7 @@ describe("Worker API", () => {
 
 
   it("streams canonical SSE without exposing provider model metadata", async () => {
+    resetHubJwksCacheForTests();
     const { token, publicJwk } = await issueWorkerToken();
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
       keys: [publicJwk],
