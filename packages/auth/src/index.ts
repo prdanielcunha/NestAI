@@ -31,6 +31,12 @@ function decodeJson<T>(value: string): T {
   return JSON.parse(new TextDecoder().decode(decodeBase64Url(value))) as T;
 }
 
+export function readNestAiTokenHeader(token: string): { alg?: string; typ?: string; kid?: string } {
+  const [encodedHeader] = token.split(".");
+  if (!encodedHeader) throw new Error("AUTH_MALFORMED_TOKEN");
+  return decodeJson<{ alg?: string; typ?: string; kid?: string }>(encodedHeader);
+}
+
 function assertClaims(value: unknown): asserts value is NestAiClaims {
   if (!value || typeof value !== "object") throw new Error("AUTH_INVALID_CLAIMS");
   const claims = value as Partial<NestAiClaims>;
@@ -56,7 +62,7 @@ export async function verifyNestAiToken(token: string, options: VerifyTokenOptio
   const [encodedHeader, encodedPayload, encodedSignature] = parts;
   if (!encodedHeader || !encodedPayload || !encodedSignature) throw new Error("AUTH_MALFORMED_TOKEN");
 
-  const header = decodeJson<{ alg?: string; typ?: string }>(encodedHeader);
+  const header = decodeJson<{ alg?: string; typ?: string; kid?: string }>(encodedHeader);
   if (header.alg !== "ES256") throw new Error("AUTH_UNSUPPORTED_ALG");
 
   const key = await crypto.subtle.importKey(
