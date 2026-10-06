@@ -1,4 +1,5 @@
 name: Auto Provision Cloudflare D1
+# bootstrap-version: 2
 on:
   push:
     branches: ["main"]
