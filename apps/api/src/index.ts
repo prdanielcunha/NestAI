@@ -19,11 +19,12 @@ import {
 } from "../../../packages/providers/src/index.js";
 import { assertProviderFreeQuota, assertWithinFreeBudget } from "../../../packages/cost-guard/src/index.js";
 import { safeTrace } from "../../../packages/observability/src/index.js";
-import { incrementUsage, getDimensionalUsage, incrementDimensionalUsage, type D1DatabaseLike } from "../../../packages/usage-ledger/src/index.js";
+import { incrementUsage, getDimensionalUsage, incrementDimensionalUsage, recordRuntimeEvent, type D1DatabaseLike } from "../../../packages/usage-ledger/src/index.js";
 import { buildTaskPrompt } from "../../../packages/prompt-registry/src/index.js";
 import { getStructuredContract, validateStructuredText } from "../../../packages/structured-output/src/index.js";
 import { CircuitBreaker, executeWithSafeFallback } from "../../../packages/resilience/src/index.js";
 import type { Locale } from "../../../packages/i18n/src/index.js";
+import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit } from "../../../packages/control-plane/src/index.js";
 
 type RateLimiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
 
@@ -119,6 +120,39 @@ function availableProviders(env: Env): string[] {
     if (env.MISTRAL_API_KEY) result.push("mistral");
   }
   return result;
+}
+
+async function authenticateAdminRequest(request: Request, env: Env): Promise<NestAiClaims> {
+  const authorization = request.headers.get("authorization");
+  if (!authorization?.startsWith("Bearer ")) throw new Error("AUTH_MISSING_BEARER");
+
+  const organizationId = request.headers.get("x-millionsnest-org");
+  if (!organizationId) throw new Error("AUTH_TENANT_REQUIRED");
+
+  const appHeader = request.headers.get("x-millionsnest-app");
+  if (appHeader !== "nestai") throw new Error("AUTH_APP_HEADER_MISMATCH");
+
+  const token = authorization.slice(7);
+  const publicJwk = await resolveHubPublicJwk(token, env);
+  const claims = await verifyNestAiToken(token, {
+    issuer: env.HUB_TOKEN_ISSUER,
+    audience: env.NESTAI_TOKEN_AUDIENCE,
+    publicJwk,
+    expectedOrganizationId: organizationId,
+    expectedAppId: "nestai",
+  });
+  requireCapability(claims, "ai:admin");
+
+  if (claims.tokenType !== "service" && env.APP_CHECK_REQUIRED === "true") {
+    const appCheckToken = request.headers.get("x-firebase-appcheck");
+    if (!appCheckToken) throw new Error("APP_CHECK_REQUIRED");
+    if (!claims.appCheckAppId) throw new Error("APP_CHECK_BINDING_MISSING");
+    await verifyFirebaseAppCheckToken(appCheckToken, {
+      projectNumber: env.FIREBASE_PROJECT_NUMBER,
+      expectedAppId: claims.appCheckAppId,
+    });
+  }
+  return claims;
 }
 
 async function authenticateRequest(args: {
@@ -293,19 +327,53 @@ async function recordProviderAttempt(
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
 
-  if (request.method === "GET" && url.pathname === "/health") {
+  if (request.method === "GET" && (url.pathname === "/health" || url.pathname === "/v1/health")) {
+    let d1 = "ready";
+    try {
+      await env.DB.prepare("SELECT 1 AS ok").first();
+    } catch {
+      d1 = "degraded";
+    }
+    const providers = {
+      cloudflare: "ready",
+      groq: env.GROQ_API_KEY ? "ready" : "unconfigured",
+      gemini: env.GEMINI_API_KEY ? "lab" : "unconfigured",
+      mistral: env.MISTRAL_API_KEY ? "lab" : "unconfigured",
+    };
+    const state = d1 === "ready" ? "operational" : "degraded";
     return json({
-      ok: true,
+      ok: state === "operational",
+      state,
       service: "nestai",
       billingMode: env.AI_BILLING_MODE,
       appCheck: env.APP_CHECK_REQUIRED === "true" ? "required" : "optional",
-      providers: {
-        cloudflare: "ready",
-        groq: env.GROQ_API_KEY ? "ready" : "unconfigured",
-        gemini: env.GEMINI_API_KEY ? "lab" : "unconfigured",
-        mistral: env.MISTRAL_API_KEY ? "lab" : "unconfigured",
+      layers: {
+        edge: "ready",
+        auth: "ready",
+        config: "ready",
+        d1,
+        kv: "unconfigured",
+        queue: "unconfigured",
+        vectorize: "unconfigured",
       },
+      providers,
     });
+  }
+
+  if (request.method === "GET" && url.pathname.startsWith("/v1/admin/")) {
+    try {
+      await authenticateAdminRequest(request, env);
+      if (url.pathname === "/v1/admin/overview") return json(await buildMissionControlOverview(env.DB));
+      if (url.pathname === "/v1/admin/apps") return json({ apps: controlPlaneApps() });
+      if (url.pathname === "/v1/admin/tasks") return json({ tasks: controlPlaneTasks() });
+      if (url.pathname === "/v1/admin/providers") return json({ providers: controlPlaneProviders() });
+      if (url.pathname === "/v1/admin/policies") return json({ policies: controlPlanePolicies() });
+      if (url.pathname === "/v1/admin/audit") return json({ events: await controlPlaneAudit(env.DB, Number(url.searchParams.get("limit") ?? 100)) });
+      return json({ error: "NOT_FOUND" }, 404);
+    } catch (error) {
+      const code = errorCode(error);
+      return json({ error: code }, statusFor(code));
+    }
   }
 
   if (request.method === "POST" && url.pathname === "/v1/chat/stream") {
@@ -327,10 +395,16 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       requireCapability(claims, "ai:stream");
 
       const rate = await env.AI_RATE_LIMITER.limit({ key: claims.organizationId + ":" + claims.sub });
-      if (!rate.success) throw new Error("RATE_LIMITED");
+      if (!rate.success) {
+      await recordRuntimeEvent(env.DB, { id: crypto.randomUUID(), eventType: "rate_limited", appId: task.app, task: task.id });
+      throw new Error("RATE_LIMITED");
+    }
 
       const privacy = classifyPrivacy(parsed.input, task.defaultSensitivity);
-      if (!privacy.externalAllowed) throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
+      if (!privacy.externalAllowed) {
+      await recordRuntimeEvent(env.DB, { id: crypto.randomUUID(), eventType: "privacy_rejected", appId: task.app, task: task.id });
+      throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
+    }
 
       const candidates = routeCandidates({
         sensitivity: privacy.sensitivity,
@@ -466,10 +540,16 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     const claims = await authenticateRequest({ request, env, task, organizationId });
 
     const rate = await env.AI_RATE_LIMITER.limit({ key: claims.organizationId + ":" + claims.sub });
-    if (!rate.success) throw new Error("RATE_LIMITED");
+    if (!rate.success) {
+      await recordRuntimeEvent(env.DB, { id: crypto.randomUUID(), eventType: "rate_limited", appId: task.app, task: task.id });
+      throw new Error("RATE_LIMITED");
+    }
 
     const privacy = classifyPrivacy(parsed.input, task.defaultSensitivity);
-    if (!privacy.externalAllowed) throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
+    if (!privacy.externalAllowed) {
+      await recordRuntimeEvent(env.DB, { id: crypto.randomUUID(), eventType: "privacy_rejected", appId: task.app, task: task.id });
+      throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
+    }
 
     const structuredContract = getStructuredContract(task.id);
     const candidates = routeCandidates({
