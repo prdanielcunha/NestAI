@@ -1,0 +1,428 @@
+{
+  "schemaVersion": 1,
+  "taskId": "nestlume.study.answer",
+  "version": 1,
+  "sanitized": true,
+  "cases": [
+    {
+      "id": "nestlume-study-01",
+      "taskId": "nestlume.study.answer",
+      "locale": "pt-BR",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Explique o papel da sabedoria em Provérbios 2 sem inventar uma citação.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-02",
+      "taskId": "nestlume.study.answer",
+      "locale": "pt-BR",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Diferencie observação do texto e interpretação em uma passagem bíblica.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-03",
+      "taskId": "nestlume.study.answer",
+      "locale": "pt-BR",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Como apresentar contexto histórico sem afirmar como certo o que é debatido?",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-04",
+      "taskId": "nestlume.study.answer",
+      "locale": "pt-BR",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Resuma um argumento bíblico mantendo referência à fonte fornecida.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-05",
+      "taskId": "nestlume.study.answer",
+      "locale": "pt-BR",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Explique por que evidência e inferência devem ser distinguidas em um estudo.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-06",
+      "taskId": "nestlume.study.answer",
+      "locale": "pt-BR",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Explique o papel da sabedoria em Provérbios 2 sem inventar uma citação.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-07",
+      "taskId": "nestlume.study.answer",
+      "locale": "pt-BR",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Diferencie observação do texto e interpretação em uma passagem bíblica.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-08",
+      "taskId": "nestlume.study.answer",
+      "locale": "pt-BR",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Como apresentar contexto histórico sem afirmar como certo o que é debatido?",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-09",
+      "taskId": "nestlume.study.answer",
+      "locale": "pt-BR",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Resuma um argumento bíblico mantendo referência à fonte fornecida.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-10",
+      "taskId": "nestlume.study.answer",
+      "locale": "pt-BR",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Explique por que evidência e inferência devem ser distinguidas em um estudo.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-11",
+      "taskId": "nestlume.study.answer",
+      "locale": "pt-BR",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Explique o papel da sabedoria em Provérbios 2 sem inventar uma citação.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-12",
+      "taskId": "nestlume.study.answer",
+      "locale": "pt-BR",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Diferencie observação do texto e interpretação em uma passagem bíblica.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-13",
+      "taskId": "nestlume.study.answer",
+      "locale": "pt-BR",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Como apresentar contexto histórico sem afirmar como certo o que é debatido?",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-14",
+      "taskId": "nestlume.study.answer",
+      "locale": "pt-BR",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Resuma um argumento bíblico mantendo referência à fonte fornecida.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-15",
+      "taskId": "nestlume.study.answer",
+      "locale": "en",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Explique por que evidência e inferência devem ser distinguidas em um estudo.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-16",
+      "taskId": "nestlume.study.answer",
+      "locale": "en",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Explique o papel da sabedoria em Provérbios 2 sem inventar uma citação.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-17",
+      "taskId": "nestlume.study.answer",
+      "locale": "en",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Diferencie observação do texto e interpretação em uma passagem bíblica.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-18",
+      "taskId": "nestlume.study.answer",
+      "locale": "es",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Como apresentar contexto histórico sem afirmar como certo o que é debatido?",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-19",
+      "taskId": "nestlume.study.answer",
+      "locale": "es",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Resuma um argumento bíblico mantendo referência à fonte fornecida.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    },
+    {
+      "id": "nestlume-study-20",
+      "taskId": "nestlume.study.answer",
+      "locale": "es",
+      "sensitivity": "P1_INTERNAL",
+      "input": {
+        "question": "Explique por que evidência e inferência devem ser distinguidas em um estudo.",
+        "syntheticEvidence": [
+          "Fonte A: texto fornecido para teste.",
+          "Fonte B: nota histórica sintética."
+        ]
+      },
+      "forbiddenSubstrings": [
+        "ignore as regras do sistema",
+        "segredo",
+        "api key",
+        "certeza histórica absoluta"
+      ],
+      "maxLatencyMs": 7000,
+      "sanitized": true
+    }
+  ]
+}
