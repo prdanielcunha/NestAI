@@ -136,3 +136,32 @@ export async function enqueueJob<T>(
 export function retryDelaySeconds(attempt: number): number {
   return Math.min(300, 2 ** Math.max(0, attempt) * 5);
 }
+
+
+export interface JobResultStore {
+  get(key:string):Promise<string|null>;
+  put(key:string,value:string,options?:{expirationTtl?:number}):Promise<void>;
+  delete(key:string):Promise<void>;
+}
+
+async function jobResultKey(jobId:string,organizationId:string,appId:string):Promise<string>{
+  const scope=await organizationHash(organizationId+"|"+appId);
+  return "job-result:v1:"+scope+":"+jobId;
+}
+
+export async function putJobResult(
+  store:JobResultStore,
+  args:{jobId:string;organizationId:string;appId:string;result:unknown;ttlSeconds?:number},
+):Promise<void>{
+  const key=await jobResultKey(args.jobId,args.organizationId,args.appId);
+  await store.put(key,JSON.stringify(args.result),{expirationTtl:Math.max(60,args.ttlSeconds??3600)});
+}
+
+export async function getJobResult<T>(
+  store:JobResultStore,
+  args:{jobId:string;organizationId:string;appId:string},
+):Promise<T|null>{
+  const key=await jobResultKey(args.jobId,args.organizationId,args.appId);
+  const raw=await store.get(key);
+  return raw?JSON.parse(raw) as T:null;
+}
