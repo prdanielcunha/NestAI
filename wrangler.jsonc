@@ -36,7 +36,11 @@
     "AI_NESTLUME_ENABLED": "true",
     "AI_NESTAFFILIATE_ENABLED": "true",
     "FIREBASE_PROJECT_NUMBER": "555464791734",
-    "APP_CHECK_REQUIRED": "true"
+    "APP_CHECK_REQUIRED": "true",
+    "AI_CACHE_ENABLED": "true",
+    "AI_JOBS_ENABLED": "true",
+    "AI_VECTORIZE_ENABLED": "false",
+    "AI_R2_WRITES_ENABLED": "false"
   },
   "d1_databases": [
     {
@@ -64,6 +68,33 @@
   "triggers": {
     "crons": [
       "*/15 * * * *"
+    ]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "0dd4893c63db467bb6dca2debd85cb04"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "JOBS",
+        "queue": "nestai-jobs"
+      },
+      {
+        "binding": "JOBS_DLQ",
+        "queue": "nestai-jobs-dlq"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "nestai-jobs",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "nestai-jobs-dlq"
+      }
     ]
   }
 }
