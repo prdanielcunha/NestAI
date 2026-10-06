@@ -2,7 +2,9 @@ export type Locale = "pt-BR" | "en" | "es";
 
 export type NestAiClientOptions = {
   appId: string;
-  organizationId: string;
+  organizationId?: string;
+  guest?: boolean;
+  guestSessionId?: string;
   locale?: Locale;
   baseUrl?: string;
   hubBaseUrl?: string;
@@ -81,11 +83,22 @@ export class NestAiClient {
   private readonly baseUrl: string;
   private readonly hubBaseUrl: string;
   private tokenCache: TokenCache | null = null;
+  private readonly generatedGuestSessionId = crypto.randomUUID().replace(/-/g, "");
 
   constructor(private readonly options: NestAiClientOptions) {
     this.fetcher = options.fetcher ?? fetch;
     this.baseUrl = ensureTrailingSlash(options.baseUrl ?? "https://ai.millionsnest.com/v1/");
     this.hubBaseUrl = ensureTrailingSlash(options.hubBaseUrl ?? "https://www.millionsnest.com/");
+  }
+
+  private organizationId(): string {
+    if (this.options.organizationId) return this.organizationId();
+    if (this.options.guest) return "public:" + this.options.appId;
+    throw new NestAiError("SDK_ORGANIZATION_REQUIRED", 0);
+  }
+
+  private guestSessionId(): string {
+    return this.options.guestSessionId ?? this.generatedGuestSessionId;
   }
 
   private async appCheckToken(): Promise<string | null> {
@@ -98,27 +111,42 @@ export class NestAiClient {
 
     const now = Date.now();
     if (this.tokenCache && this.tokenCache.expiresAt - now > 30_000) return this.tokenCache.token;
-    if (!this.options.getFirebaseIdToken || !this.options.getAppCheckToken) {
-      throw new NestAiError("SDK_AUTH_PROVIDER_MISSING", 0);
-    }
+    if (!this.options.getAppCheckToken) throw new NestAiError("SDK_APP_CHECK_PROVIDER_MISSING", 0);
 
-    const [firebaseIdToken, appCheckToken] = await Promise.all([
-      this.options.getFirebaseIdToken(),
-      this.options.getAppCheckToken(),
-    ]);
-    const response = await this.fetcher(new URL("api/v1/ai/token", this.hubBaseUrl), {
-      method: "POST",
-      headers: {
-        authorization: "Bearer " + firebaseIdToken,
-        "x-firebase-appcheck": appCheckToken,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        organizationId: this.options.organizationId,
-        appId: this.options.appId,
-        locale: this.options.locale ?? "pt-BR",
-      }),
-    });
+    const appCheckToken = await this.options.getAppCheckToken();
+    const guestMode = this.options.guest === true;
+    let response: Response;
+
+    if (guestMode) {
+      response = await this.fetcher(new URL("api/v1/ai/guest-token", this.hubBaseUrl), {
+        method: "POST",
+        headers: {
+          "x-firebase-appcheck": appCheckToken,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          appId: this.options.appId,
+          locale: this.options.locale ?? "pt-BR",
+          sessionId: this.guestSessionId(),
+        }),
+      });
+    } else {
+      if (!this.options.getFirebaseIdToken) throw new NestAiError("SDK_AUTH_PROVIDER_MISSING", 0);
+      const firebaseIdToken = await this.options.getFirebaseIdToken();
+      response = await this.fetcher(new URL("api/v1/ai/token", this.hubBaseUrl), {
+        method: "POST",
+        headers: {
+          authorization: "Bearer " + firebaseIdToken,
+          "x-firebase-appcheck": appCheckToken,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          organizationId: this.organizationId(),
+          appId: this.options.appId,
+          locale: this.options.locale ?? "pt-BR",
+        }),
+      });
+    }
     const body = await response.json() as { token?: string; expiresIn?: number; error?: string };
     if (!response.ok || !body.token || !body.expiresIn) {
       throw new NestAiError(body.error ?? "SDK_HUB_TOKEN_FAILED", response.status);
@@ -146,7 +174,7 @@ export class NestAiClient {
       task: request.task,
       input: request.input,
       context: {
-        organizationId: this.options.organizationId,
+        organizationId: this.organizationId(),
         locale: this.options.locale ?? "pt-BR",
       },
     });
@@ -241,7 +269,7 @@ export class NestAiClient {
 
   async getJob<TResult = unknown>(jobId: string): Promise<JobStatusResponse<TResult>> {
     const headers = await this.headers();
-    headers["x-millionsnest-org"] = this.options.organizationId;
+    headers["x-millionsnest-org"] = this.organizationId();
     const response = await this.fetcher(new URL("jobs/" + encodeURIComponent(jobId), this.baseUrl), {
       headers,
     });
