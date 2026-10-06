@@ -2,6 +2,7 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 const runtimeGlobals = {
+  atob: "readonly",
   console: "readonly",
   crypto: "readonly",
   fetch: "readonly",
