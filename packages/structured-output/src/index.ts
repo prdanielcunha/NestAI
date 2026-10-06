@@ -8,6 +8,39 @@ export type StructuredContract<T = unknown> = {
   jsonSchema: JsonSchema;
 };
 
+const connectClassifySchema = z.object({
+  intent: z.string().min(1),
+  urgency: z.enum(["low","normal","high","critical"]),
+  requiresHuman: z.boolean(),
+  confidence: z.number().min(0).max(1),
+});
+
+const nestLocalRequestSchema = z.object({
+  intent: z.string().min(1),
+  service: z.string().nullable(),
+  dimensions: z.object({
+    width: z.number().positive().nullable(),
+    height: z.number().positive().nullable(),
+  }).nullable(),
+  preferredDate: z.string().nullable(),
+  preferredPeriod: z.enum(["morning","afternoon","evening"]).nullable(),
+  missingFields: z.array(z.string()),
+});
+
+const musicStructureSchema = z.object({
+  sections: z.array(z.object({
+    name: z.string().min(1),
+    repeats: z.number().int().min(1).max(32).nullable(),
+  })).min(1),
+  uncertain: z.array(z.string()),
+});
+
+const affiliateProductSchema = z.object({
+  facts: z.array(z.string()),
+  opportunities: z.array(z.string()),
+  unknowns: z.array(z.string()),
+});
+
 const receiptSchema = z.object({
   merchant: z.string().nullable(),
   amount: z.number().nonnegative().nullable(),
@@ -35,6 +68,83 @@ const affiliatePinSchema = z.object({
 });
 
 export const structuredContracts: Record<string, StructuredContract> = {
+  "connect.message.classify": {
+    id: "connect.message.classify.v1",
+    schema: connectClassifySchema,
+    jsonSchema: {
+      type: "object", additionalProperties: false,
+      required: ["intent","urgency","requiresHuman","confidence"],
+      properties: {
+        intent: { type: "string", minLength: 1 },
+        urgency: { enum: ["low","normal","high","critical"] },
+        requiresHuman: { type: "boolean" },
+        confidence: { type: "number", minimum: 0, maximum: 1 },
+      },
+    },
+  },
+  "nestlocal.request.extract": {
+    id: "nestlocal.request.extract.v1",
+    schema: nestLocalRequestSchema,
+    jsonSchema: {
+      type: "object", additionalProperties: false,
+      required: ["intent","service","dimensions","preferredDate","preferredPeriod","missingFields"],
+      properties: {
+        intent: { type: "string", minLength: 1 },
+        service: { type: ["string","null"] },
+        dimensions: {
+          anyOf: [
+            { type: "null" },
+            {
+              type: "object", additionalProperties: false,
+              required: ["width","height"],
+              properties: {
+                width: { type: ["number","null"] },
+                height: { type: ["number","null"] },
+              },
+            },
+          ],
+        },
+        preferredDate: { type: ["string","null"] },
+        preferredPeriod: { anyOf: [{type:"null"},{enum:["morning","afternoon","evening"]}] },
+        missingFields: { type: "array", items: { type: "string" } },
+      },
+    },
+  },
+  "musicscale.song.structure": {
+    id: "musicscale.song.structure.v1",
+    schema: musicStructureSchema,
+    jsonSchema: {
+      type: "object", additionalProperties: false,
+      required: ["sections","uncertain"],
+      properties: {
+        sections: {
+          type: "array", minItems: 1,
+          items: {
+            type: "object", additionalProperties: false,
+            required: ["name","repeats"],
+            properties: {
+              name: { type: "string", minLength: 1 },
+              repeats: { type: ["integer","null"], minimum: 1, maximum: 32 },
+            },
+          },
+        },
+        uncertain: { type: "array", items: { type: "string" } },
+      },
+    },
+  },
+  "affiliate.product.analyze": {
+    id: "affiliate.product.analyze.v1",
+    schema: affiliateProductSchema,
+    jsonSchema: {
+      type: "object", additionalProperties: false,
+      required: ["facts","opportunities","unknowns"],
+      properties: {
+        facts: { type: "array", items: { type: "string" } },
+        opportunities: { type: "array", items: { type: "string" } },
+        unknowns: { type: "array", items: { type: "string" } },
+      },
+    },
+  },
   "finance.receipt.extract": {
     id: "finance.receipt.v1",
     schema: receiptSchema,
