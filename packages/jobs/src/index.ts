@@ -28,7 +28,7 @@ export interface QueueLike<T = unknown> {
   send(message: T, options?: { delaySeconds?: number }): Promise<void>;
 }
 
-async function organizationHash(value: string): Promise<string> {
+export async function jobOrganizationHash(value: string): Promise<string> {
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(bytes))
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -56,7 +56,7 @@ export async function persistQueuedJob(
   db: D1DatabaseLike,
   job: JobEnvelope,
 ): Promise<void> {
-  const orgHash = await organizationHash(job.organizationId);
+  const orgHash = await jobOrganizationHash(job.organizationId);
   const metadata = {
     locale: job.locale,
     payloadStored: false,
@@ -145,7 +145,7 @@ export interface JobResultStore {
 }
 
 async function jobResultKey(jobId:string,organizationId:string,appId:string):Promise<string>{
-  const scope=await organizationHash(organizationId+"|"+appId);
+  const scope=await jobOrganizationHash(organizationId+"|"+appId);
   return "job-result:v1:"+scope+":"+jobId;
 }
 
@@ -164,4 +164,30 @@ export async function getJobResult<T>(
   const key=await jobResultKey(args.jobId,args.organizationId,args.appId);
   const raw=await store.get(key);
   return raw?JSON.parse(raw) as T:null;
+}
+
+
+export async function getJobForScope(
+  db:D1DatabaseLike,
+  args:{jobId:string;organizationId:string;appId:string},
+):Promise<JobRecord|null>{
+  const orgHash=await jobOrganizationHash(args.organizationId);
+  const row=await db.prepare(
+    "SELECT job_id,app_id,task_id,status,attempt,metadata_json,created_at,updated_at FROM cp_jobs " +
+    "WHERE job_id=?1 AND app_id=?2 AND organization_id_hash=?3"
+  ).bind(args.jobId,args.appId,orgHash).first<{
+    job_id:string;app_id:string;task_id:string;status:JobStatus;attempt:number;
+    metadata_json:string;created_at:string;updated_at:string;
+  }>();
+  if(!row) return null;
+  return {
+    jobId:row.job_id,
+    appId:row.app_id,
+    taskId:row.task_id,
+    status:row.status,
+    attempt:row.attempt,
+    createdAt:row.created_at,
+    updatedAt:row.updated_at,
+    metadata:JSON.parse(row.metadata_json) as Record<string,unknown>,
+  };
 }
