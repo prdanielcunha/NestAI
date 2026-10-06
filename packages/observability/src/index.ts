@@ -4,20 +4,20 @@ export type TraceEvent = {
   appId: string;
   organizationIdHash: string;
   sensitivity: string;
-  provider?: string;
-  model?: string;
-  promptVersion?: number;
-  durationMs?: number;
-  ttftMs?: number;
-  inputTokens?: number;
-  outputTokens?: number;
-  fallbackUsed?: boolean;
-  retries?: number;
-  cached?: boolean;
-  outputValidation?: "not_required" | "passed" | "failed";
-  toolUsage?: boolean;
+  provider?: string | undefined;
+  model?: string | undefined;
+  promptVersion?: number | undefined;
+  durationMs?: number | undefined;
+  ttftMs?: number | undefined;
+  inputTokens?: number | undefined;
+  outputTokens?: number | undefined;
+  fallbackUsed?: boolean | undefined;
+  retries?: number | undefined;
+  cached?: boolean | undefined;
+  outputValidation?: "not_required" | "passed" | "failed" | undefined;
+  toolUsage?: boolean | undefined;
   outcome: "started" | "success" | "rejected" | "error";
-  errorCode?: string;
+  errorCode?: string | undefined;
 };
 
 async function digest(value: string): Promise<string> {
