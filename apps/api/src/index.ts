@@ -892,7 +892,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         maxSensitivity: task.defaultSensitivity,
         locale: input.context.locale,
         queryVector,
-        topK: input.topK,
+        ...(input.topK !== undefined ? { topK: input.topK } : {}),
       });
 
       const parsed = TaskRequest.parse({
