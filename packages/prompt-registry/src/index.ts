@@ -76,6 +76,138 @@ export const prompts: Record<string, PromptDefinition> = {
       es: "Crea copy para Pinterest sin afirmaciones engañosas, promesas no verificadas ni precios inventados.",
     },
   },
+  "hub.operational.summary": {
+    id: "hub.operational.summary",
+    taskId: "hub.operational.summary",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Resuma os sinais operacionais fornecidos sem inventar métricas, causas ou incidentes. Separe fatos observados de hipóteses.",
+      en: "Summarize the supplied operational signals without inventing metrics, causes, or incidents. Separate observed facts from hypotheses.",
+      es: "Resume las señales operativas suministradas sin inventar métricas, causas ni incidentes. Separa hechos observados de hipótesis.",
+    },
+  },
+  "hub.incident.explain": {
+    id: "hub.incident.explain",
+    taskId: "hub.incident.explain",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Explique o incidente com base apenas nos eventos e evidências fornecidos. Diferencie impacto confirmado, causa conhecida e hipótese.",
+      en: "Explain the incident using only the supplied events and evidence. Distinguish confirmed impact, known cause, and hypothesis.",
+      es: "Explica el incidente usando solo los eventos y evidencias suministrados. Distingue impacto confirmado, causa conocida e hipótesis.",
+    },
+  },
+  "connect.message.classify": {
+    id: "connect.message.classify",
+    taskId: "connect.message.classify",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Classifique a mensagem sem tomar ação externa. Retorne somente a classificação solicitada e sinais úteis.",
+      en: "Classify the message without taking external action. Return only the requested classification and useful signals.",
+      es: "Clasifica el mensaje sin realizar acciones externas. Devuelve solo la clasificación solicitada y señales útiles.",
+    },
+  },
+  "nestlocal.request.extract": {
+    id: "nestlocal.request.extract",
+    taskId: "nestlocal.request.extract",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Extraia do pedido somente dados explicitamente presentes. Não invente dimensões, endereço, preço, agenda ou disponibilidade.",
+      en: "Extract only data explicitly present in the request. Do not invent dimensions, address, price, schedule, or availability.",
+      es: "Extrae solo datos explícitamente presentes en la solicitud. No inventes dimensiones, dirección, precio, agenda ni disponibilidad.",
+    },
+  },
+  "nestlocal.quote.compose": {
+    id: "nestlocal.quote.compose",
+    taskId: "nestlocal.quote.compose",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Redija o orçamento usando exclusivamente preço, escopo, prazo e disponibilidade fornecidos pelo domínio. Não calcule preço nem prometa agenda.",
+      en: "Draft the quote using only price, scope, timeline, and availability supplied by the domain. Do not calculate price or promise schedule.",
+      es: "Redacta el presupuesto usando solo precio, alcance, plazo y disponibilidad suministrados por el dominio. No calcules precio ni prometas agenda.",
+    },
+  },
+  "nestlocal.followup.compose": {
+    id: "nestlocal.followup.compose",
+    taskId: "nestlocal.followup.compose",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Redija um follow-up breve e respeitoso baseado no estado real fornecido. Não diga que algo foi pago, agendado ou concluído sem evidência.",
+      en: "Draft a brief respectful follow-up based on the supplied real state. Do not claim payment, scheduling, or completion without evidence.",
+      es: "Redacta un seguimiento breve y respetuoso basado en el estado real suministrado. No afirmes pago, agenda o finalización sin evidencia.",
+    },
+  },
+  "journey.followup.summarize": {
+    id: "journey.followup.summarize",
+    taskId: "journey.followup.summarize",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Resuma o acompanhamento com linguagem conservadora. Não diagnostique, não exponha conteúdo emocional desnecessário e não invente próximos passos.",
+      en: "Summarize the follow-up conservatively. Do not diagnose, expose unnecessary emotional content, or invent next steps.",
+      es: "Resume el seguimiento de forma conservadora. No diagnostiques, expongas contenido emocional innecesario ni inventes próximos pasos.",
+    },
+  },
+  "finance.report.explain": {
+    id: "finance.report.explain",
+    taskId: "finance.report.explain",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Explique os números fornecidos sem alterar lançamentos, criar fatos financeiros ou substituir validação contábil. Mostre claramente limitações.",
+      en: "Explain the supplied numbers without changing entries, inventing financial facts, or replacing accounting validation. State limitations clearly.",
+      es: "Explica los números suministrados sin cambiar registros, inventar hechos financieros ni sustituir validación contable. Indica claramente las limitaciones.",
+    },
+  },
+  "musicscale.song.structure": {
+    id: "musicscale.song.structure",
+    taskId: "musicscale.song.structure",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Organize a estrutura musical somente a partir das partes fornecidas. Preserve letras/cifras recebidas e não invente repetições como se fossem da gravação original.",
+      en: "Organize the song structure only from supplied parts. Preserve provided lyrics/chords and do not invent repetitions as if they came from the original recording.",
+      es: "Organiza la estructura musical solo a partir de las partes suministradas. Conserva letra/acordes y no inventes repeticiones como si fueran de la grabación original.",
+    },
+  },
+  "musicscale.team.message.compose": {
+    id: "musicscale.team.message.compose",
+    taskId: "musicscale.team.message.compose",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Redija uma mensagem clara para a equipe usando apenas dados reais da escala fornecida. Não altere presença, função, horário ou repertório.",
+      en: "Draft a clear team message using only supplied schedule data. Do not change attendance, role, time, or repertoire.",
+      es: "Redacta un mensaje claro para el equipo usando solo datos reales de la escala. No cambies asistencia, función, horario ni repertorio.",
+    },
+  },
+  "nestlume.entity.explain": {
+    id: "nestlume.entity.explain",
+    taskId: "nestlume.entity.explain",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Explique a entidade distinguindo identidade, ocorrências, contexto textual e incertezas. Não misture pessoas homônimas nem trate hipótese como fato.",
+      en: "Explain the entity while distinguishing identity, occurrences, textual context, and uncertainty. Do not merge namesakes or present hypotheses as facts.",
+      es: "Explica la entidad distinguiendo identidad, ocurrencias, contexto textual e incertidumbres. No mezcles homónimos ni presentes hipótesis como hechos.",
+    },
+  },
+  "affiliate.product.analyze": {
+    id: "affiliate.product.analyze",
+    taskId: "affiliate.product.analyze",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Analise somente fatos públicos fornecidos do produto. Separe atributo, inferência e oportunidade de conteúdo; não invente preço, estoque, avaliação ou benefício.",
+      en: "Analyze only supplied public product facts. Separate attributes, inference, and content opportunity; do not invent price, stock, rating, or benefit.",
+      es: "Analiza solo hechos públicos suministrados del producto. Separa atributo, inferencia y oportunidad de contenido; no inventes precio, stock, valoración ni beneficio.",
+    },
+  },
 };
 
 function serializeEvidence(evidence: unknown): string {
