@@ -19,6 +19,14 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm test:security
+      - run: pnpm build
+        env:
+          VITE_FIREBASE_APPCHECK_SITE_KEY: "6LcpY-EtAAAAAElqBbIL_K7nAkm2wpuF6fbhsggG"
+      - name: Apply D1 migrations
+        run: pnpm wrangler d1 migrations apply nestai --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: pnpm deploy:dry
       - run: pnpm run deploy
         env:
@@ -70,3 +78,19 @@ jobs:
           }
           console.log('NESTAI_OFFICIAL_DOMAIN_HEALTH_OK');
           NODE
+
+      - name: Mission Control smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL="https://ai.millionsnest.com"
+
+          curl --fail --silent --show-error             --retry 20 --retry-delay 3 --retry-all-errors             "$BASE_URL/" -o /tmp/console.html
+          grep -q "NestAI — MillionsNest Intelligence Platform" /tmp/console.html
+
+          curl --fail --silent --show-error             --retry 10 --retry-delay 2 --retry-all-errors             "$BASE_URL/providers" -o /tmp/providers.html
+          grep -q "NestAI — MillionsNest Intelligence Platform" /tmp/providers.html
+
+          STATUS="$(curl --silent --show-error             -o /tmp/admin.json             -w '%{http_code}'             "$BASE_URL/v1/admin/overview")"
+          test "$STATUS" = "401"
+          echo "NESTAI_MISSION_CONTROL_LIVE_OK"
