@@ -72,6 +72,10 @@ function statusFor(code: string): number {
 
 type JwksKey = JsonWebKey & { kid?: string; alg?: string; use?: string };
 let jwksCache: { expiresAt: number; keys: JwksKey[] } | null = null;
+
+export function resetHubJwksCacheForTests(): void {
+  jwksCache = null;
+}
 const breaker = new CircuitBreaker({ failureThreshold: 3, openMs: 30_000 });
 
 async function resolveHubPublicJwk(token: string, env: Env): Promise<JsonWebKey> {
