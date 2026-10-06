@@ -6,8 +6,8 @@ export type GenerateRequest = {
   route: RouteDecision;
   messages: ProviderMessage[];
   maxTokens?: number;
-  responseSchema?: JsonSchema;
-  signal?: AbortSignal;
+  responseSchema?: JsonSchema | undefined;
+  signal?: AbortSignal | undefined;
 };
 export type GenerateResult = {
   text: string;
@@ -61,7 +61,7 @@ export async function generateWithGroq(apiKey: string, request: GenerateRequest)
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { authorization: "Bearer " + apiKey, "content-type": "application/json" },
-    signal: request.signal,
+    ...(request.signal ? { signal: request.signal } : {}),
     body: JSON.stringify({
       model: request.route.providerModelId,
       messages: request.messages,
@@ -106,7 +106,7 @@ export async function generateWithGemini(apiKey: string, request: GenerateReques
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      signal: request.signal,
+      ...(request.signal ? { signal: request.signal } : {}),
       body: JSON.stringify({
         systemInstruction: geminiSystem(request.messages),
         contents: geminiContents(request.messages),
@@ -141,7 +141,7 @@ export async function generateWithMistral(apiKey: string, request: GenerateReque
   const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
     method: "POST",
     headers: { authorization: "Bearer " + apiKey, "content-type": "application/json" },
-    signal: request.signal,
+    ...(request.signal ? { signal: request.signal } : {}),
     body: JSON.stringify({
       model: request.route.providerModelId,
       messages: request.messages,
@@ -193,7 +193,7 @@ export async function streamWithGroq(apiKey: string, request: GenerateRequest): 
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { authorization: "Bearer " + apiKey, "content-type": "application/json" },
-    signal: request.signal,
+    ...(request.signal ? { signal: request.signal } : {}),
     body: JSON.stringify({
       model: request.route.providerModelId,
       messages: request.messages,
