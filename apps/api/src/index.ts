@@ -763,6 +763,88 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     }
   }
 
+  if (request.method === "POST" && url.pathname === "/v1/jobs") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    try {
+      if (env.AI_JOBS_ENABLED !== "true" || !env.JOBS || !env.CACHE) throw new Error("JOB_QUEUE_UNAVAILABLE");
+      const raw = await request.json();
+      const parsed = TaskRequest.parse(raw);
+      const task = getTask(parsed.task);
+      assertKillSwitches(task, env);
+      if (task.priority !== "background") throw new Error("JOB_TASK_NOT_BACKGROUND");
+
+      const organizationId = parsed.context.organizationId;
+      if (!organizationId) throw new Error("AUTH_TENANT_REQUIRED");
+      const claims = await authenticateRequest({ request, env, task, organizationId });
+
+      const rate = await env.AI_RATE_LIMITER.limit({ key: claims.organizationId + ":" + claims.sub });
+      if (!rate.success) throw new Error("RATE_LIMITED");
+
+      const privacy = classifyPrivacy(parsed.input, task.defaultSensitivity);
+      if (!privacy.externalAllowed) throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
+
+      const serialized = JSON.stringify(parsed.input);
+      if (new TextEncoder().encode(serialized).byteLength > 96_000) {
+        throw new Error("JOB_PAYLOAD_TOO_LARGE");
+      }
+
+      const job = createJob({
+        organizationId,
+        appId: task.app,
+        task: task.id,
+        payload: parsed.input,
+        locale: (parsed.context.locale ?? claims.locale ?? "pt-BR") as Locale,
+      });
+      await enqueueJob(env.JOBS, env.DB, job);
+      return json({
+        requestId,
+        jobId: job.id,
+        status: "queued",
+        statusUrl: "/v1/jobs/" + job.id,
+      }, 202);
+    } catch (error) {
+      const code = errorCode(error);
+      const status = code.startsWith("JOB_") ? 422 : statusFor(code);
+      return json({ requestId, error: code }, status);
+    }
+  }
+
+  const jobMatch = request.method === "GET" ? url.pathname.match(/^\/v1\/jobs\/([0-9a-f-]{36})$/i) : null;
+  if (jobMatch?.[1]) {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    try {
+      const claims = await authenticateScopedRequest(request, env);
+      const record = await getJobForScope(env.DB, {
+        jobId: jobMatch[1],
+        organizationId: claims.organizationId,
+        appId: claims.appId,
+      });
+      if (!record) return json({ requestId, error: "JOB_NOT_FOUND" }, 404);
+      const result = record.status === "succeeded" && env.CACHE
+        ? await getJobResult<unknown>(env.CACHE, {
+            jobId: record.jobId,
+            organizationId: claims.organizationId,
+            appId: claims.appId,
+          })
+        : null;
+      return json({
+        requestId,
+        job: {
+          id: record.jobId,
+          task: record.taskId,
+          status: record.status,
+          attempt: record.attempt,
+          createdAt: record.createdAt,
+          updatedAt: record.updatedAt,
+          ...(result !== null ? { result } : {}),
+        },
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      return json({ requestId, error: code }, statusFor(code));
+    }
+  }
+
   if (request.method === "POST" && url.pathname === "/v1/transcribe") {
     const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
     const started = Date.now();
@@ -1314,4 +1396,4 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   }
 }
 
-export default { fetch: handleRequest };
+export default { fetch: handleRequest, queue: handleQueueBatch };
