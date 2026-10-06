@@ -1,0 +1,71 @@
+name: Sync NestAI SDK dependency
+
+on:
+  workflow_call:
+    inputs:
+      sdk_version:
+        required: false
+        type: string
+        default: "0.1.0"
+  workflow_dispatch:
+    inputs:
+      sdk_version:
+        description: SDK version
+        required: false
+        default: "0.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        if: ${{ hashFiles('pnpm-lock.yaml') != '' || contains(fromJSON('["pnpm@10.17.1"]'), 'pnpm@10.17.1') }}
+        with:
+          version: 10.17.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install official NestAI SDK
+        shell: bash
+        env:
+          SDK_VERSION: ${{ inputs.sdk_version || '0.1.0' }}
+        run: |
+          set -euo pipefail
+          URL="https://github.com/prdanielcunha/NestAI/releases/download/sdk-v$SDK_VERSION/millionsnest-ai-$SDK_VERSION.tgz"
+
+          if [ -f pnpm-lock.yaml ] || grep -q '"packageManager"[[:space:]]*:[[:space:]]*"pnpm@' package.json 2>/dev/null; then
+            corepack enable
+            pnpm add -w "$URL"
+          else
+            npm install --save-exact "$URL"
+          fi
+
+          node - <<'NODE'
+          const pkg = require('./package.json');
+          const dep = pkg.dependencies?.['@millionsnest/ai'] || pkg.devDependencies?.['@millionsnest/ai'];
+          if (!dep) throw new Error('NESTAI_SDK_NOT_INSTALLED');
+          console.log('NESTAI_SDK_DEPENDENCY=' + dep);
+          NODE
+
+      - name: Commit SDK dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package.json package-lock.json pnpm-lock.yaml bun.lock 2>/dev/null; then
+            echo "NestAI SDK dependency already synchronized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          for file in package-lock.json pnpm-lock.yaml bun.lock; do
+            [ -f "$file" ] && git add "$file" || true
+          done
+          git commit -m "nestai: install @millionsnest/ai SDK"
+          git push
