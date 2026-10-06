@@ -43,6 +43,7 @@ export type Env = {
   DB: D1DatabaseLike;
   CACHE?: KvNamespaceLike;
   JOBS?: QueueLike<JobEnvelope>;
+  JOBS_DLQ?: QueueLike<{ job: JobEnvelope; error: string }>;
   GROQ_API_KEY?: string;
   GEMINI_API_KEY?: string;
   MISTRAL_API_KEY?: string;
