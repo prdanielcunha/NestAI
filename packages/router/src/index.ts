@@ -30,6 +30,7 @@ const preference: ModelId[] = [
   "cloudflare:flux-1-schnell",
   "groq:gpt-oss-20b",
   "cloudflare:glm-4.7-flash",
+  "gemini:3.5-flash-lite",
   "groq:gpt-oss-120b",
   "cloudflare:nemotron-3-120b-a12b",
   "cloudflare:gemma-4-26b-a4b-it",
