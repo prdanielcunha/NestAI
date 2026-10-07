@@ -265,7 +265,6 @@ export function validateStructuredText(taskId: string, text: string): unknown {
 
 export function assertGroundedEvidenceInput(taskId: string, input: unknown): void {
   if (taskId !== "nestlume.study.grounded") return;
-  assertGroundedEvidenceInput(taskId, input);
   const request = input && typeof input === "object" ? input as Record<string, unknown> : {};
   const evidence = request.evidence;
   if (!Array.isArray(evidence) || evidence.length < 1 || evidence.length > 12) throw new Error("EVIDENCE_REQUIRED");
@@ -280,6 +279,7 @@ export function assertGroundedEvidenceInput(taskId: string, input: unknown): voi
 
 export function verifyGroundedEvidence(taskId: string, input: unknown, output: unknown): void {
   if (taskId !== "nestlume.study.grounded") return;
+  assertGroundedEvidenceInput(taskId, input);
   const request = input && typeof input === "object" ? input as Record<string, unknown> : {};
   const raw = Array.isArray(request.evidence) ? request.evidence : [];
   const evidenceIds = new Set(raw
