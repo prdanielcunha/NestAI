@@ -1,6 +1,11 @@
 name: Audit ecosystem NestAI cutover
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/audit-ecosystem-cutover.mjs
+      - tests/audit-ecosystem-cutover.test.mjs
+      - .github/workflows/audit-ecosystem-cutover.yml
 permissions:
   contents: read
 jobs:
