@@ -40,7 +40,7 @@
     "AI_CACHE_ENABLED": "true",
     "AI_JOBS_ENABLED": "true",
     "AI_VECTORIZE_ENABLED": "true",
-    "AI_R2_WRITES_ENABLED": "false",
+    "AI_R2_WRITES_ENABLED": "true",
     "AI_HUB_ENABLED": "true",
     "AI_NESTLOCAL_ENABLED": "true",
     "AI_NESTJOURNEY_ENABLED": "true",
@@ -105,6 +105,12 @@
     {
       "binding": "VECTORIZE",
       "index_name": "nestai-knowledge"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "KNOWLEDGE_BUCKET",
+      "bucket_name": "nestai-knowledge"
     }
   ]
 }
