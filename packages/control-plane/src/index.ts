@@ -266,7 +266,7 @@ export async function syncStaticControlPlane(
   for(const route of routes){
     await db.prepare(
       "INSERT INTO cp_routes(route_id,task_id,current_version,status,updated_at) VALUES (?1,?2,?3,'production',?4) " +
-      "ON CONFLICT(route_id) DO UPDATE SET task_id=excluded.task_id,current_version=excluded.current_version,status='production',updated_at=excluded.updated_at"
+      "ON CONFLICT(route_id) DO UPDATE SET task_id=excluded.task_id,updated_at=excluded.updated_at"
     ).bind(route.id,route.task,route.version,timestamp).run();
     await db.prepare(
       "INSERT OR IGNORE INTO cp_route_versions(route_id,version,config_json,created_at) VALUES (?1,?2,?3,?4)"
@@ -276,7 +276,7 @@ export async function syncStaticControlPlane(
   for(const prompt of Object.values(prompts)){
     await db.prepare(
       "INSERT INTO cp_prompts(prompt_id,task_id,current_version,status,updated_at) VALUES (?1,?2,?3,'production',?4) " +
-      "ON CONFLICT(prompt_id) DO UPDATE SET task_id=excluded.task_id,current_version=excluded.current_version,status='production',updated_at=excluded.updated_at"
+      "ON CONFLICT(prompt_id) DO UPDATE SET task_id=excluded.task_id,updated_at=excluded.updated_at"
     ).bind(prompt.id,prompt.taskId,prompt.version,timestamp).run();
     await db.prepare(
       "INSERT OR IGNORE INTO cp_prompt_versions(prompt_id,version,content_json,created_at) VALUES (?1,?2,?3,?4)"
@@ -286,7 +286,7 @@ export async function syncStaticControlPlane(
   const policy=controlPlanePolicies();
   await db.prepare(
     "INSERT INTO cp_policies(policy_id,current_version,status,updated_at) VALUES ('core',1,'production',?1) " +
-    "ON CONFLICT(policy_id) DO UPDATE SET current_version=1,status='production',updated_at=excluded.updated_at"
+    "ON CONFLICT(policy_id) DO UPDATE SET updated_at=excluded.updated_at"
   ).bind(timestamp).run();
   await db.prepare(
     "INSERT OR IGNORE INTO cp_policy_versions(policy_id,version,config_json,created_at) VALUES ('core',1,?1,?2)"
@@ -442,7 +442,7 @@ async function nextVersion(
   const row = await db.prepare(
     `SELECT COALESCE(MAX(version),0) AS version FROM ${table} WHERE ${idColumn}=?1`
   ).bind(id).first<{ version: number }>();
-  return Number(row?.version ?? 0) + 1;
+  return Math.max(1000, Number(row?.version ?? 0) + 1);
 }
 
 export async function createControlPlaneDraft(
