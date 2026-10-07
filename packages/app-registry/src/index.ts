@@ -17,7 +17,14 @@ export const ecosystemApps: AppManifest[] = [
   { appId: "connect", displayName: "MillionsNest Connect", allowedTasks: ["connect.message.classify","connect.reply.suggest","connect.audio.transcribe"], defaultLocale: "pt-BR", enabled: true },
   { appId: "nestlocal", displayName: "NestLocal", allowedTasks: ["nestlocal.request.extract","nestlocal.quote.compose","nestlocal.followup.compose"], defaultLocale: "pt-BR", enabled: true },
   { appId: "nestjourney", displayName: "NestJourney", allowedTasks: ["journey.form.extract","journey.followup.summarize"], defaultLocale: "pt-BR", enabled: true },
-  { appId: "nestfinance", displayName: "NestFinance", allowedTasks: ["finance.receipt.extract","finance.report.explain"], defaultLocale: "pt-BR", enabled: true },
+  { appId: "nestfinance", displayName: "NestFinance", allowedTasks: [
+    "finance.receipt.extract",
+    "finance.report.explain",
+    "finance.count.regions.extract",
+    "finance.count.denominations.extract",
+    "finance.count.freeform.extract",
+    "finance.document.transaction.extract",
+  ], defaultLocale: "pt-BR", enabled: true },
   { appId: "musicscale", displayName: "MusicScale", allowedTasks: [
     "musicscale.song.structure",
     "musicscale.team.message.compose",
