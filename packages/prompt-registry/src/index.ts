@@ -198,6 +198,38 @@ export const prompts: Record<string, PromptDefinition> = {
       es: "Redacta un mensaje claro para el equipo usando solo datos reales de la escala. No cambies asistencia, función, horario ni repertorio.",
     },
   },
+  "finance.count.regions.extract": {
+    id:"finance.count.regions.extract", taskId:"finance.count.regions.extract", version:1, systemPolicy:sharedSystemPolicy,
+    instructions:{
+      "pt-BR":"Leia exatamente os quatro recortes rotulados de uma ficha oficial de contagem. Cada arquivo corresponde ao label tithe, offering, other_income ou pix. Não calcule, some, reconcilie, transfira valores entre campos nem invente. recognized somente com uma leitura monetária inequívoca; uncertain se houver mais de uma leitura plausível; unreadable quando há marca mas não é legível; blank sem valor. observation em recognized contém somente o valor visto. Retorne todos os quatro campos.",
+      en:"Read exactly the four labeled crops from an official count sheet. Each file corresponds to tithe, offering, other_income, or pix. Never calculate, sum, reconcile, move values across fields, or invent. Use recognized only for one unambiguous monetary reading; uncertain for multiple plausible readings; unreadable for illegible marks; blank for no value. For recognized, observation is only the visible value. Return all four fields.",
+      es:"Lee exactamente los cuatro recortes etiquetados de una hoja oficial de conteo. Cada archivo corresponde a tithe, offering, other_income o pix. No calcules, sumes, reconcilies, muevas valores ni inventes. recognized solo para una lectura monetaria inequívoca; uncertain si hay varias; unreadable si hay marcas ilegibles; blank sin valor. En recognized, observation contiene solo el valor visible. Devuelve los cuatro campos."
+    }
+  },
+  "finance.count.denominations.extract": {
+    id:"finance.count.denominations.extract", taskId:"finance.count.denominations.extract", version:1, systemPolicy:sharedSystemPolicy,
+    instructions:{
+      "pt-BR":"Leia cada recorte rotulado de célula de quantidade de cédulas/moedas. O label é cellKey e deve ser preservado exatamente. Retorne somente a quantidade inteira visível; não multiplique pela denominação, não calcule subtotal, não reconcilie e não infira entre células. recognized apenas para inteiro não negativo inequívoco; uncertain para múltiplas leituras; unreadable para marca ilegível; blank quando vazio. Retorne exatamente uma entrada para cada arquivo recebido.",
+      en:"Read each labeled denomination quantity crop. Preserve its label exactly as cellKey. Return only the visible integer quantity; never multiply by denomination, calculate subtotals, reconcile, or infer across cells. recognized only for one unambiguous non-negative integer; uncertain for multiple readings; unreadable for illegible marks; blank when empty. Return exactly one entry per received file.",
+      es:"Lee cada recorte etiquetado de cantidad por denominación. Conserva exactamente su label como cellKey. Devuelve solo la cantidad entera visible; no multipliques por denominación, calcules subtotales, reconcilies ni infieras entre celdas. recognized solo para un entero no negativo inequívoco; uncertain para varias lecturas; unreadable para marcas ilegibles; blank si está vacío. Devuelve una entrada por archivo."
+    }
+  },
+  "finance.count.freeform.extract": {
+    id:"finance.count.freeform.extract", taskId:"finance.count.freeform.extract", version:1, systemPolicy:sharedSystemPolicy,
+    instructions:{
+      "pt-BR":"Leia uma anotação livre de contagem de caixa de igreja. Extraia exatamente tithe, offering, other_income e pix apenas quando rótulo e valor estiverem semanticamente associados. Não some linhas, não derive totais, não classifique número sem rótulo e não infira Pix por aparência. Zero só quando explicitamente escrito. Se houver vários valores sem total explícito, uncertain. Resultado é apenas sugestão para revisão humana.",
+      en:"Read one free-form church cash-count note. Extract exactly tithe, offering, other_income, and pix only when label and value are clearly associated. Do not sum lines, derive totals, classify unlabeled numbers, or infer Pix by appearance. Zero only when explicitly written. Multiple values without an explicit total are uncertain. Output is a human-review suggestion only.",
+      es:"Lee una nota libre de conteo de caja de iglesia. Extrae exactamente tithe, offering, other_income y pix solo cuando etiqueta y valor estén claramente asociados. No sumes líneas, derives totales, clasifiques números sin etiqueta ni infieras Pix por apariencia. Cero solo si está escrito explícitamente. Varios valores sin total explícito son uncertain. Solo sugerencia para revisión humana."
+    }
+  },
+  "finance.document.transaction.extract": {
+    id:"finance.document.transaction.extract", taskId:"finance.document.transaction.extract", version:1, systemPolicy:sharedSystemPolicy,
+    instructions:{
+      "pt-BR":"Analise exatamente um documento financeiro. A saída é proposta não autoritativa: nunca cria, publica ou aprova transação. Use apenas evidência extraída do arquivo. Retorne todos os campos exigidos; recognized apenas quando bem suportado, uncertain quando ambíguo, absent quando ausente. Não invente CNPJ, valores, datas, partes, status, meio de pagamento, direção ou categoria. category_id só pode usar ID presente em context.categories e com direção compatível. Preserve papéis de issuer/recipient/payer/payee e document_multiplicity.",
+      en:"Analyze exactly one financial document. Output is a non-authoritative proposal and never creates/posts/approves a transaction. Use only evidence extracted from the file. Return every required field; recognized only when well supported, uncertain when ambiguous, absent when unsupported. Never invent tax IDs, amounts, dates, parties, settlement, payment method, direction, or category. category_id may use only an ID from context.categories with compatible direction. Preserve issuer/recipient/payer/payee roles and document_multiplicity.",
+      es:"Analiza exactamente un documento financiero. La salida es una propuesta no autoritativa y nunca crea/publica/aprueba una transacción. Usa solo evidencia extraída. Devuelve todos los campos; recognized solo si está bien sustentado, uncertain si es ambiguo, absent si no existe. No inventes IDs fiscales, valores, fechas, partes, pago, dirección ni categoría. category_id solo puede usar IDs de context.categories con dirección compatible. Conserva los roles y document_multiplicity."
+    }
+  },
   "musicscale.chords.repair": {
     id: "musicscale.chords.repair",
     taskId: "musicscale.chords.repair",
