@@ -611,13 +611,27 @@ async function prepareTaskExecution(
   };
 }
 
+async function buildResolvedTaskPrompt(
+  env: Env,
+  args: Parameters<typeof buildTaskPrompt>[0],
+): Promise<ReturnType<typeof buildTaskPrompt>> {
+  const override = await getActivePromptOverride(env.DB, args.taskId);
+  return buildTaskPrompt({
+    ...args,
+    ...(override ? {
+      instructionsOverride: override.instructions,
+      promptVersionOverride: override.version,
+    } : {}),
+  });
+}
+
 async function safeCandidates(
   env: Env,
   prepared: PreparedTaskExecution,
   modality: TaskDefinition["modality"],
   needsStructuredOutput = false,
 ): Promise<RouteDecision[]> {
-  const candidates = routeCandidates({
+  let candidates = routeCandidates({
     sensitivity: prepared.sensitivity,
     billingMode: env.AI_BILLING_MODE,
     modality,
@@ -626,6 +640,8 @@ async function safeCandidates(
     availableProviders: availableProviders(env),
     needsStructuredOutput,
   });
+  candidates = await applyActivePolicyOverlay(env.DB, candidates);
+  candidates = await applyActiveRoutePreference(env.DB, prepared.task.id, candidates);
   if (candidates.length === 0) throw new Error("ROUTER_NO_ELIGIBLE_MODEL");
   return quotaEligibleCandidates(env, prepared.claims, prepared.task, prepared.organizationId, candidates);
 }
@@ -675,7 +691,7 @@ async function executeJobEnvelope(env: Env, job: JobEnvelope): Promise<unknown> 
     assertGroundedEvidenceInput(task.id, job.payload);
     const structured = getStructuredContract(task.id);
     const candidates = await safeCandidates(env, prepared, "text", structured !== null);
-    const prompt = buildTaskPrompt({ taskId: task.id, locale: job.locale, input: job.payload });
+    const prompt = await buildResolvedTaskPrompt(env, { taskId: task.id, locale: job.locale, input: job.payload });
     const execution = await executeWithSafeFallback({
       candidates,
       keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
@@ -766,7 +782,7 @@ async function executeJobEnvelope(env: Env, job: JobEnvelope): Promise<unknown> 
         }))];
     const structured = getStructuredContract(task.id);
     const candidates = await safeCandidates(env, prepared, "text", structured !== null);
-    const prompt = buildTaskPrompt({
+    const prompt = await buildResolvedTaskPrompt(env, {
       taskId: task.id,
       locale: job.locale,
       input: {
@@ -1319,7 +1335,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         locale: input.context.locale,
       };
       const candidates = await safeCandidates(env, prepared, "text");
-      const prompt = buildTaskPrompt({
+      const prompt = await buildResolvedTaskPrompt(env, {
         taskId: task.id,
         locale: input.context.locale,
         input: input.query,
@@ -1579,7 +1595,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
       const structured = getStructuredContract(prepared.task.id);
       const textCandidates = await safeCandidates(env, prepared, "text", structured !== null);
-      const prompt = buildTaskPrompt({
+      const prompt = await buildResolvedTaskPrompt(env, {
         taskId: prepared.task.id,
         locale: prepared.locale,
         input: {
@@ -1791,7 +1807,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
       const quotaCandidates = await quotaEligibleCandidates(env, claims, task, organizationId, candidates);
       const locale = (parsed.context.locale ?? claims.locale ?? "pt-BR") as Locale;
-      const prompt = buildTaskPrompt({ taskId: task.id, locale, input: parsed.input });
+      const prompt = await buildResolvedTaskPrompt(env, { taskId: task.id, locale, input: parsed.input });
 
       const execution = await executeWithSafeFallback({
         candidates: quotaCandidates,
@@ -1929,7 +1945,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     assertGroundedEvidenceInput(task.id, parsed.input);
     const structuredContract = getStructuredContract(task.id);
     const locale = (parsed.context.locale ?? claims.locale ?? "pt-BR") as Locale;
-    const prompt = buildTaskPrompt({ taskId: task.id, locale, input: parsed.input });
+    const prompt = await buildResolvedTaskPrompt(env, { taskId: task.id, locale, input: parsed.input });
     const cacheContext = {
       taskId: task.id,
       taskVersion: task.version,
