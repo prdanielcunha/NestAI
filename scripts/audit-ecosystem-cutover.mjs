@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Source-level certification only. Never labels production end-to-end calls as verified.
 import { writeFile, appendFile } from 'node:fs/promises';
+import { Buffer } from 'node:buffer';
 import { pathToFileURL } from 'node:url';
 
 export const consumers = Object.freeze([
@@ -86,7 +87,7 @@ async function requestGithub(route, token) {
       'user-agent': 'nestai-ecosystem-cutover-audit',
       ...(token ? { authorization: 'Bearer ' + token } : {}),
     },
-    signal: AbortSignal.timeout(12000),
+    signal: globalThis.AbortSignal.timeout(12000),
   });
   if (!response.ok) throw new Error('GITHUB_HTTP_' + response.status + ' ' + route);
   return response.json();
