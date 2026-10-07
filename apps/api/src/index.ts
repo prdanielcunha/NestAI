@@ -16,8 +16,13 @@ import {
   transcribeWithCloudflare,
   transcribeWithGroq,
   extractDocumentTextWithCloudflare,
+  extractDocumentsTextWithCloudflare,
   embedWithCloudflare,
   generateImageWithCloudflare,
+  probeGroq,
+  probeGemini,
+  probeMistral,
+  type ProviderProbeResult,
   type GenerateRequest,
   type GenerateResult,
   type WorkersAiBinding,
@@ -146,6 +151,51 @@ function availableProviders(env: Env): string[] {
     if (env.GROQ_API_KEY) result.push("groq");
     if (env.GEMINI_API_KEY) result.push("gemini");
     if (env.MISTRAL_API_KEY) result.push("mistral");
+  }
+  return result;
+}
+
+async function providerSecretFingerprint(secret: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
+  return Array.from(new Uint8Array(digest))
+    .slice(0, 8)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function cachedProviderProbe(
+  env: Env,
+  provider: "groq" | "gemini" | "mistral",
+): Promise<ProviderProbeResult> {
+  const secret =
+    provider === "groq" ? env.GROQ_API_KEY :
+    provider === "gemini" ? env.GEMINI_API_KEY :
+    env.MISTRAL_API_KEY;
+
+  if (!secret) return { provider, state: "unconfigured" };
+  const fingerprint = await providerSecretFingerprint(secret);
+  const cacheKey = "provider-probe:v2:" + provider + ":" + fingerprint;
+
+  if (env.CACHE) {
+    const cached = await env.CACHE.get(cacheKey);
+    if (cached) {
+      try {
+        return JSON.parse(cached) as ProviderProbeResult;
+      } catch {
+        await env.CACHE.delete(cacheKey);
+      }
+    }
+  }
+
+  const result =
+    provider === "groq" ? await probeGroq(secret) :
+    provider === "gemini" ? await probeGemini(secret) :
+    await probeMistral(secret);
+
+  if (env.CACHE) {
+    await env.CACHE.put(cacheKey, JSON.stringify(result), {
+      expirationTtl: result.state === "ready" ? 21_600 : 3_600,
+    });
   }
   return result;
 }
@@ -597,21 +647,46 @@ async function executeJobEnvelope(env: Env, job: JobEnvelope): Promise<unknown> 
   if (task.modality === "vision") {
     const input = VisionInput.parse(job.payload);
     await recordProviderAttempt(env, claims, task, job.organizationId, "cloudflare");
-    const converted = await withTimeout(
-      () => extractDocumentTextWithCloudflare(env.AI, {
-        base64: input.fileBase64,
-        mimeType: input.mimeType,
-        fileName: input.fileName,
-        locale: job.locale,
-      }),
-      Math.min(task.timeoutMs, 25_000),
-    );
+    const convertedInput = "files" in input
+      ? await withTimeout(
+          () => extractDocumentsTextWithCloudflare(env.AI, {
+            files: input.files.map((file) => ({
+              base64: file.fileBase64,
+              mimeType: file.mimeType,
+              fileName: file.fileName,
+              ...(file.label ? { label: file.label } : {}),
+            })),
+            locale: job.locale,
+          }),
+          Math.min(task.timeoutMs, 25_000),
+        )
+      : [await withTimeout(
+          () => extractDocumentTextWithCloudflare(env.AI, {
+            base64: input.fileBase64,
+            mimeType: input.mimeType,
+            fileName: input.fileName,
+            locale: job.locale,
+          }),
+          Math.min(task.timeoutMs, 25_000),
+        ).then((item) => ({
+          fileName: input.fileName,
+          ...("label" in input && input.label ? { label: input.label } : {}),
+          text: item.text,
+          ...(item.tokens !== undefined ? { tokens: item.tokens } : {}),
+        }))];
     const structured = getStructuredContract(task.id);
     const candidates = await safeCandidates(env, prepared, "text", structured !== null);
     const prompt = buildTaskPrompt({
       taskId: task.id,
       locale: job.locale,
-      input: { extractedText: converted.text },
+      input: {
+        files: convertedInput.map(({ fileName, label, text }) => ({
+          fileName,
+          ...(label ? { label } : {}),
+          extractedText: text,
+        })),
+        context: input.context ?? {},
+      },
     });
     const execution = await executeWithSafeFallback({
       candidates,
@@ -764,6 +839,20 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
           : env.AI_R2_WRITES_ENABLED === "false" ? "write_locked" : "unconfigured",
       },
       providers,
+    });
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/health/providers") {
+    const [groq, gemini, mistral] = await Promise.all([
+      cachedProviderProbe(env, "groq"),
+      cachedProviderProbe(env, "gemini"),
+      cachedProviderProbe(env, "mistral"),
+    ]);
+    return json({
+      ok: true,
+      service: "nestai",
+      billingMode: env.AI_BILLING_MODE,
+      probes: { groq, gemini, mistral },
     });
   }
 
@@ -1212,22 +1301,47 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
       // Conversion is intentionally Cloudflare-only for P3-capable OCR/document parsing.
       await recordProviderAttempt(env, prepared.claims, prepared.task, prepared.organizationId, "cloudflare");
-      const converted = await withTimeout(
-        () => extractDocumentTextWithCloudflare(env.AI, {
-          base64: input.fileBase64,
-          mimeType: input.mimeType,
-          fileName: input.fileName,
-          locale: prepared.locale,
-        }),
-        Math.min(prepared.task.timeoutMs, 25_000),
-      );
+      const convertedInput = "files" in input
+        ? await withTimeout(
+            () => extractDocumentsTextWithCloudflare(env.AI, {
+              files: input.files.map((file) => ({
+                base64: file.fileBase64,
+                mimeType: file.mimeType,
+                fileName: file.fileName,
+                ...(file.label ? { label: file.label } : {}),
+              })),
+              locale: prepared.locale,
+            }),
+            Math.min(prepared.task.timeoutMs, 25_000),
+          )
+        : [await withTimeout(
+            () => extractDocumentTextWithCloudflare(env.AI, {
+              base64: input.fileBase64,
+              mimeType: input.mimeType,
+              fileName: input.fileName,
+              locale: prepared.locale,
+            }),
+            Math.min(prepared.task.timeoutMs, 25_000),
+          ).then((item) => ({
+            fileName: input.fileName,
+            ...("label" in input && input.label ? { label: input.label } : {}),
+            text: item.text,
+            ...(item.tokens !== undefined ? { tokens: item.tokens } : {}),
+          }))];
 
       const structured = getStructuredContract(prepared.task.id);
       const textCandidates = await safeCandidates(env, prepared, "text", structured !== null);
       const prompt = buildTaskPrompt({
         taskId: prepared.task.id,
         locale: prepared.locale,
-        input: { extractedText: converted.text },
+        input: {
+          files: convertedInput.map(({ fileName, label, text }) => ({
+            fileName,
+            ...(label ? { label } : {}),
+            extractedText: text,
+          })),
+          context: input.context ?? {},
+        },
       });
 
       const execution = await executeWithSafeFallback({

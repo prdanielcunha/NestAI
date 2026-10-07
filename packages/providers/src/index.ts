@@ -16,6 +16,165 @@ export type GenerateResult = {
   usage?: { inputTokens: number | undefined; outputTokens: number | undefined };
 };
 
+export type ProviderProbeState =
+  | "ready"
+  | "unconfigured"
+  | "auth_failed"
+  | "plan_blocked"
+  | "quota_blocked"
+  | "model_unavailable"
+  | "unavailable";
+
+export type ProviderProbeResult = {
+  provider: "groq" | "gemini" | "mistral";
+  state: ProviderProbeState;
+  httpStatus?: number;
+  modelAccess?: boolean;
+  inferenceAccess?: boolean;
+  code?: string;
+};
+
+function probeStateFromStatus(status: number): ProviderProbeState {
+  if (status === 401) return "auth_failed";
+  if (status === 402 || status === 403) return "plan_blocked";
+  if (status === 429) return "quota_blocked";
+  return "unavailable";
+}
+
+export async function probeGroq(apiKey: string): Promise<ProviderProbeResult> {
+  if (!apiKey) return { provider: "groq", state: "unconfigured" };
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/models", {
+      headers: { authorization: "Bearer " + apiKey },
+    });
+    if (!response.ok) {
+      return {
+        provider: "groq",
+        state: probeStateFromStatus(response.status),
+        httpStatus: response.status,
+        code: "PROVIDER_GROQ_PROBE_HTTP_" + response.status,
+      };
+    }
+    const body = await response.json() as { data?: Array<{ id?: string }> };
+    const ids = new Set((body.data ?? []).map((item) => item.id).filter((id): id is string => Boolean(id)));
+    const modelAccess = ids.has("openai/gpt-oss-20b") || ids.has("openai/gpt-oss-120b");
+    return {
+      provider: "groq",
+      state: modelAccess ? "ready" : "model_unavailable",
+      httpStatus: response.status,
+      modelAccess,
+    };
+  } catch {
+    return { provider: "groq", state: "unavailable", code: "PROVIDER_GROQ_PROBE_NETWORK" };
+  }
+}
+
+export async function probeGemini(apiKey: string): Promise<ProviderProbeResult> {
+  if (!apiKey) return { provider: "gemini", state: "unconfigured" };
+  try {
+    const response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models?key=" + encodeURIComponent(apiKey),
+    );
+    if (!response.ok) {
+      return {
+        provider: "gemini",
+        state: probeStateFromStatus(response.status),
+        httpStatus: response.status,
+        code: "PROVIDER_GEMINI_PROBE_HTTP_" + response.status,
+      };
+    }
+    const body = await response.json() as { models?: Array<{ name?: string }> };
+    const names = new Set((body.models ?? []).map((item) => item.name).filter((name): name is string => Boolean(name)));
+    const modelAccess =
+      names.has("models/gemini-3.5-flash-lite") ||
+      names.has("models/gemini-3.5-flash");
+    return {
+      provider: "gemini",
+      state: modelAccess ? "ready" : "model_unavailable",
+      httpStatus: response.status,
+      modelAccess,
+    };
+  } catch {
+    return { provider: "gemini", state: "unavailable", code: "PROVIDER_GEMINI_PROBE_NETWORK" };
+  }
+}
+
+export async function probeMistral(apiKey: string): Promise<ProviderProbeResult> {
+  if (!apiKey) return { provider: "mistral", state: "unconfigured" };
+  try {
+    const modelsResponse = await fetch("https://api.mistral.ai/v1/models", {
+      headers: { authorization: "Bearer " + apiKey },
+    });
+    if (!modelsResponse.ok) {
+      return {
+        provider: "mistral",
+        state: probeStateFromStatus(modelsResponse.status),
+        httpStatus: modelsResponse.status,
+        code: "PROVIDER_MISTRAL_PROBE_HTTP_" + modelsResponse.status,
+      };
+    }
+
+    const body = await modelsResponse.json() as {
+      data?: Array<{ id?: string; aliases?: string[] }>;
+    };
+    const ids = new Set<string>();
+    for (const item of body.data ?? []) {
+      if (item.id) ids.add(item.id);
+      for (const alias of item.aliases ?? []) ids.add(alias);
+    }
+    const targetModel =
+      ids.has("mistral-small-2603") ? "mistral-small-2603" :
+      ids.has("mistral-small-latest") ? "mistral-small-latest" :
+      null;
+
+    if (!targetModel) {
+      return {
+        provider: "mistral",
+        state: "model_unavailable",
+        httpStatus: modelsResponse.status,
+        modelAccess: false,
+      };
+    }
+
+    // One-token inference confirms that the key is not merely creatable but
+    // actually entitled to use the API. This is cached by the Worker health
+    // layer so it is not repeated on every health request.
+    const inferenceResponse = await fetch("https://api.mistral.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer " + apiKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: targetModel,
+        messages: [{ role: "user", content: "OK" }],
+        max_tokens: 1,
+        temperature: 0,
+      }),
+    });
+    if (!inferenceResponse.ok) {
+      return {
+        provider: "mistral",
+        state: probeStateFromStatus(inferenceResponse.status),
+        httpStatus: inferenceResponse.status,
+        modelAccess: true,
+        inferenceAccess: false,
+        code: "PROVIDER_MISTRAL_INFERENCE_HTTP_" + inferenceResponse.status,
+      };
+    }
+
+    return {
+      provider: "mistral",
+      state: "ready",
+      httpStatus: inferenceResponse.status,
+      modelAccess: true,
+      inferenceAccess: true,
+    };
+  } catch {
+    return { provider: "mistral", state: "unavailable", code: "PROVIDER_MISTRAL_PROBE_NETWORK" };
+  }
+}
+
 export type MarkdownConversionResult = {
   id?: string;
   name?: string;
@@ -393,6 +552,42 @@ export async function extractDocumentTextWithCloudflare(
   const item=Array.isArray(result)?result[0]:result;
   if(!item || item.format==="error" || !item.data) throw new Error("PROVIDER_DOCUMENT_CONVERSION_FAILED");
   return { text: item.data, ...(item.tokens !== undefined ? { tokens: item.tokens } : {}) };
+}
+
+export async function extractDocumentsTextWithCloudflare(
+  ai:WorkersAiBinding,
+  args:{
+    files:Array<{base64:string;mimeType:string;fileName:string;label?:string}>;
+    locale:"pt-BR"|"en"|"es";
+  },
+):Promise<Array<{fileName:string;label?:string;text:string;tokens?:number}>> {
+  if(!ai.toMarkdown) throw new Error("PROVIDER_MARKDOWN_CONVERSION_UNAVAILABLE");
+  if(args.files.length<1 || args.files.length>40) throw new Error("PROVIDER_DOCUMENT_BATCH_INVALID");
+  const result=await ai.toMarkdown(
+    args.files.map((file)=>({
+      name:file.fileName,
+      blob:new Blob([bytesToArrayBuffer(base64Bytes(file.base64))],{type:file.mimeType}),
+    })),
+    {
+      conversionOptions:{
+        output:{format:"text"},
+        image:{descriptionLanguage:args.locale==="pt-BR"?"pt":args.locale},
+        pdf:{metadata:false},
+      },
+    },
+  );
+  const items=Array.isArray(result)?result:[result];
+  if(items.length!==args.files.length) throw new Error("PROVIDER_DOCUMENT_BATCH_MISMATCH");
+  return items.map((item,index)=>{
+    const source=args.files[index]!;
+    if(!item || item.format==="error" || !item.data) throw new Error("PROVIDER_DOCUMENT_CONVERSION_FAILED");
+    return {
+      fileName:source.fileName,
+      ...(source.label?{label:source.label}:{}),
+      text:item.data,
+      ...(item.tokens!==undefined?{tokens:item.tokens}:{}),
+    };
+  });
 }
 
 export async function embedWithCloudflare(

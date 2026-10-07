@@ -198,6 +198,170 @@ export const prompts: Record<string, PromptDefinition> = {
       es: "Redacta un mensaje claro para el equipo usando solo datos reales de la escala. No cambies asistencia, función, horario ni repertorio.",
     },
   },
+  "finance.count.regions.extract": {
+    id:"finance.count.regions.extract", taskId:"finance.count.regions.extract", version:1, systemPolicy:sharedSystemPolicy,
+    instructions:{
+      "pt-BR":"Leia exatamente os quatro recortes rotulados de uma ficha oficial de contagem. Cada arquivo corresponde ao label tithe, offering, other_income ou pix. Não calcule, some, reconcilie, transfira valores entre campos nem invente. recognized somente com uma leitura monetária inequívoca; uncertain se houver mais de uma leitura plausível; unreadable quando há marca mas não é legível; blank sem valor. observation em recognized contém somente o valor visto. Retorne todos os quatro campos.",
+      en:"Read exactly the four labeled crops from an official count sheet. Each file corresponds to tithe, offering, other_income, or pix. Never calculate, sum, reconcile, move values across fields, or invent. Use recognized only for one unambiguous monetary reading; uncertain for multiple plausible readings; unreadable for illegible marks; blank for no value. For recognized, observation is only the visible value. Return all four fields.",
+      es:"Lee exactamente los cuatro recortes etiquetados de una hoja oficial de conteo. Cada archivo corresponde a tithe, offering, other_income o pix. No calcules, sumes, reconcilies, muevas valores ni inventes. recognized solo para una lectura monetaria inequívoca; uncertain si hay varias; unreadable si hay marcas ilegibles; blank sin valor. En recognized, observation contiene solo el valor visible. Devuelve los cuatro campos."
+    }
+  },
+  "finance.count.denominations.extract": {
+    id:"finance.count.denominations.extract", taskId:"finance.count.denominations.extract", version:1, systemPolicy:sharedSystemPolicy,
+    instructions:{
+      "pt-BR":"Leia cada recorte rotulado de célula de quantidade de cédulas/moedas. O label é cellKey e deve ser preservado exatamente. Retorne somente a quantidade inteira visível; não multiplique pela denominação, não calcule subtotal, não reconcilie e não infira entre células. recognized apenas para inteiro não negativo inequívoco; uncertain para múltiplas leituras; unreadable para marca ilegível; blank quando vazio. Retorne exatamente uma entrada para cada arquivo recebido.",
+      en:"Read each labeled denomination quantity crop. Preserve its label exactly as cellKey. Return only the visible integer quantity; never multiply by denomination, calculate subtotals, reconcile, or infer across cells. recognized only for one unambiguous non-negative integer; uncertain for multiple readings; unreadable for illegible marks; blank when empty. Return exactly one entry per received file.",
+      es:"Lee cada recorte etiquetado de cantidad por denominación. Conserva exactamente su label como cellKey. Devuelve solo la cantidad entera visible; no multipliques por denominación, calcules subtotales, reconcilies ni infieras entre celdas. recognized solo para un entero no negativo inequívoco; uncertain para varias lecturas; unreadable para marcas ilegibles; blank si está vacío. Devuelve una entrada por archivo."
+    }
+  },
+  "finance.count.freeform.extract": {
+    id:"finance.count.freeform.extract", taskId:"finance.count.freeform.extract", version:1, systemPolicy:sharedSystemPolicy,
+    instructions:{
+      "pt-BR":"Leia uma anotação livre de contagem de caixa de igreja. Extraia exatamente tithe, offering, other_income e pix apenas quando rótulo e valor estiverem semanticamente associados. Não some linhas, não derive totais, não classifique número sem rótulo e não infira Pix por aparência. Zero só quando explicitamente escrito. Se houver vários valores sem total explícito, uncertain. Resultado é apenas sugestão para revisão humana.",
+      en:"Read one free-form church cash-count note. Extract exactly tithe, offering, other_income, and pix only when label and value are clearly associated. Do not sum lines, derive totals, classify unlabeled numbers, or infer Pix by appearance. Zero only when explicitly written. Multiple values without an explicit total are uncertain. Output is a human-review suggestion only.",
+      es:"Lee una nota libre de conteo de caja de iglesia. Extrae exactamente tithe, offering, other_income y pix solo cuando etiqueta y valor estén claramente asociados. No sumes líneas, derives totales, clasifiques números sin etiqueta ni infieras Pix por apariencia. Cero solo si está escrito explícitamente. Varios valores sin total explícito son uncertain. Solo sugerencia para revisión humana."
+    }
+  },
+  "finance.document.transaction.extract": {
+    id:"finance.document.transaction.extract", taskId:"finance.document.transaction.extract", version:1, systemPolicy:sharedSystemPolicy,
+    instructions:{
+      "pt-BR":"Analise exatamente um documento financeiro. A saída é proposta não autoritativa: nunca cria, publica ou aprova transação. Use apenas evidência extraída do arquivo. Retorne todos os campos exigidos; recognized apenas quando bem suportado, uncertain quando ambíguo, absent quando ausente. Não invente CNPJ, valores, datas, partes, status, meio de pagamento, direção ou categoria. category_id só pode usar ID presente em context.categories e com direção compatível. Preserve papéis de issuer/recipient/payer/payee e document_multiplicity.",
+      en:"Analyze exactly one financial document. Output is a non-authoritative proposal and never creates/posts/approves a transaction. Use only evidence extracted from the file. Return every required field; recognized only when well supported, uncertain when ambiguous, absent when unsupported. Never invent tax IDs, amounts, dates, parties, settlement, payment method, direction, or category. category_id may use only an ID from context.categories with compatible direction. Preserve issuer/recipient/payer/payee roles and document_multiplicity.",
+      es:"Analiza exactamente un documento financiero. La salida es una propuesta no autoritativa y nunca crea/publica/aprueba una transacción. Usa solo evidencia extraída. Devuelve todos los campos; recognized solo si está bien sustentado, uncertain si es ambiguo, absent si no existe. No inventes IDs fiscales, valores, fechas, partes, pago, dirección ni categoría. category_id solo puede usar IDs de context.categories con dirección compatible. Conserva los roles y document_multiplicity."
+    }
+  },
+  "musicscale.chords.repair": {
+    id: "musicscale.chords.repair",
+    taskId: "musicscale.chords.repair",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Você é especialista em cifras. Corrija somente a cifra fornecida: remova lixo/dicionários de acordes/notas editoriais/tablaturas quebradas; mantenha acordes em linha própria e letra intacta na linha correspondente; preserve seções instrumentais e tags; ajuste apenas formatos/deslocamentos evidentes. Respeite instruçõesExtras quando seguras. Retorne SOMENTE o texto da cifra corrigida, sem markdown.",
+      en: "You are a chord-chart specialist. Repair only the supplied chart: remove junk/chord dictionaries/editorial notes/broken tablature; keep chords on their own line and lyrics intact; preserve instrumental sections/tags; fix only evident formatting/displacement issues. Follow safe extraInstructions. Return ONLY the corrected chart text without markdown.",
+      es: "Eres especialista en cifrados. Corrige solo el cifrado suministrado: elimina basura/diccionarios/notas editoriales/tablaturas rotas; mantén acordes en línea propia y la letra intacta; conserva secciones instrumentales/etiquetas; corrige solo formato/desplazamiento evidente. Respeta instruccionesExtras seguras. Devuelve SOLO el texto corregido sin markdown.",
+    },
+  },
+  "musicscale.song.import.enrich": {
+    id: "musicscale.song.import.enrich",
+    taskId: "musicscale.song.import.enrich",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "O documento musical em canonicalDocument foi normalizado por parser determinístico e é SOMENTE LEITURA. Enriqueça apenas metadados/ambiguidades sem reescrever, reordenar, resumir, corrigir, transpor ou reformar cifra/letra. Não devolva chords/lyrics. Não invente título, artista, tom, BPM, ritmo ou seção. sections deve refletir apenas seções observadas e na ordem. sectionAnnotations deve usar nomes literais observados; instrument é vocabulário fechado. Quando incerto use null/unknown e warnings. Responda somente JSON.",
+      en: "canonicalDocument is deterministic parser output and READ ONLY. Enrich metadata/semantic ambiguity only; never rewrite, reorder, summarize, correct, transpose, or reformat lyrics/chords. Do not return chords/lyrics. Do not invent title, artist, key, BPM, rhythm, or sections. Preserve observed section order and literal section names. Use closed instrument vocabulary; use null/unknown plus warnings when uncertain. JSON only.",
+      es: "canonicalDocument fue normalizado por un parser determinista y es SOLO LECTURA. Enriquece únicamente metadatos/ambigüedades; no reescribas, reordenes, resumas, corrijas, transpongas ni reformatees cifra/letra. No devuelvas chords/lyrics. No inventes título, artista, tono, BPM, ritmo o secciones. Conserva orden y nombres observados; usa vocabulario cerrado e indica null/unknown con warnings cuando haya duda. Solo JSON.",
+    },
+  },
+  "musicscale.song.suggest": {
+    id: "musicscale.song.suggest",
+    taskId: "musicscale.song.suggest",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Atue como diretor musical e sugira de 1 a 3 músicas para continuar/complementar o setlist usando somente currentSongs e librarySongs fornecidos. Considere tonalidade, BPM/energia, fluxo e repetição. Prefira músicas da biblioteca e preserve id quando presente. Não invente disponibilidade nem fatos externos. JSON somente.",
+      en: "Act as a music director and suggest 1 to 3 songs to continue/complement the setlist using only supplied currentSongs and librarySongs. Consider key, BPM/energy, flow, and repetition. Prefer library songs and preserve id when present. Do not invent availability or external facts. JSON only.",
+      es: "Actúa como director musical y sugiere de 1 a 3 canciones para continuar/complementar el setlist usando solo currentSongs y librarySongs suministrados. Considera tono, BPM/energía, flujo y repetición. Prefiere canciones de la biblioteca y conserva id cuando exista. No inventes disponibilidad ni hechos externos. Solo JSON.",
+    },
+  },
+  "musicscale.setlist.analyze": {
+    id: "musicscale.setlist.analyze",
+    taskId: "musicscale.setlist.analyze",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Analise somente o setlist fornecido. Avalie fluidez de transições, tonalidade, BPM/energia, repetição e equilíbrio congregacional. Pontue 0-100 sem inventar informações ausentes. Sugestões são revisáveis e não alteram a escala. JSON somente.",
+      en: "Analyze only the supplied setlist. Evaluate transition flow, key, BPM/energy, repetition, and congregational balance. Score 0-100 without inventing missing facts. Suggestions are review-only and never modify the schedule. JSON only.",
+      es: "Analiza solo el setlist suministrado. Evalúa fluidez de transiciones, tonalidad, BPM/energía, repetición y equilibrio congregacional. Puntúa 0-100 sin inventar datos faltantes. Las sugerencias son revisables y no modifican la escala. Solo JSON.",
+    },
+  },
+  "musicscale.release-note.generate": {
+    id: "musicscale.release-note.generate",
+    taskId: "musicscale.release-note.generate",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Crie uma sugestão editorial de release note do MusicScale a partir exclusivamente de detectedFiles e suppliedChanges. Foque benefício real sem inventar funcionalidade não fornecida. Produza pt/en/es, categoria permitida e isMajor conservador. A versão é apenas sugestão; não publique nem altere versão. JSON somente.",
+      en: "Create an editorial MusicScale release-note suggestion using only detectedFiles and suppliedChanges. Focus on real benefits without inventing features. Produce pt/en/es, an allowed category, and conservative isMajor. Version is only a suggestion; do not publish or change versions. JSON only.",
+      es: "Crea una sugerencia editorial de release note de MusicScale usando solo detectedFiles y suppliedChanges. Enfócate en beneficios reales sin inventar funciones. Produce pt/en/es, categoría permitida e isMajor conservador. La versión es solo sugerencia; no publiques ni cambies versiones. Solo JSON.",
+    },
+  },
+  "musicscale.live.diagnostic.explain": {
+    id: "musicscale.live.diagnostic.explain",
+    taskId: "musicscale.live.diagnostic.explain",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Explique os diagnósticos fornecidos em linguagem clara. Separe fatos observados de hipóteses e sugira somente verificações seguras. Nunca execute nem afirme TAKE/ações de provider.",
+      en: "Explain the supplied diagnostics clearly. Separate observed facts from hypotheses and suggest only safe checks. Never execute or claim TAKE/provider actions.",
+      es: "Explica claramente los diagnósticos suministrados. Separa hechos observados de hipótesis y sugiere solo verificaciones seguras. Nunca ejecutes ni afirmes acciones TAKE/del proveedor.",
+    },
+  },
+  "musicscale.live.song-match.assist": {
+    id: "musicscale.live.song-match.assist",
+    taskId: "musicscale.live.song-match.assist",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Compare candidatos de identidade da música usando somente título, artista, versão, fingerprint e evidências fornecidas. Não trate candidato ambíguo como certeza.",
+      en: "Compare song identity candidates using only supplied title, artist, version, fingerprint, and evidence. Never present an ambiguous candidate as certain.",
+      es: "Compara candidatos de identidad de canción usando solo título, artista, versión, fingerprint y evidencias suministradas. No presentes un candidato ambiguo como certeza.",
+    },
+  },
+  "musicscale.live.request.classify": {
+    id: "musicscale.live.request.classify",
+    taskId: "musicscale.live.request.classify",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Classifique e deduplique solicitações de colaboração preservando a intenção original. Nunca converta uma solicitação em comando de execução.",
+      en: "Classify and deduplicate collaboration requests while preserving original intent. Never turn a request into an execution command.",
+      es: "Clasifica y deduplica solicitudes de colaboración preservando la intención original. Nunca conviertas una solicitud en comando de ejecución.",
+    },
+  },
+  "musicscale.live.search.interpret": {
+    id: "musicscale.live.search.interpret",
+    taskId: "musicscale.live.search.interpret",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Interprete a busca em linguagem natural apenas como pistas/filtros de pesquisa. Não afirme que conteúdo foi exibido e não execute TAKE.",
+      en: "Interpret natural-language search only into search hints/filters. Do not claim content was displayed and do not execute TAKE.",
+      es: "Interpreta la búsqueda en lenguaje natural solo como pistas/filtros. No afirmes que se mostró contenido ni ejecutes TAKE.",
+    },
+  },
+  "musicscale.live.metadata.normalize": {
+    id: "musicscale.live.metadata.normalize",
+    taskId: "musicscale.live.metadata.normalize",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Normalize nomes, tags e metadados preservando significado. Não invente valores ausentes.",
+      en: "Normalize names, tags, and metadata while preserving meaning. Do not invent missing values.",
+      es: "Normaliza nombres, etiquetas y metadatos preservando el significado. No inventes valores ausentes.",
+    },
+  },
+  "musicscale.live.post-service.summary": {
+    id: "musicscale.live.post-service.summary",
+    taskId: "musicscale.live.post-service.summary",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Resuma somente os fatos pós-culto/execução fornecidos. Não julgue pessoas, não infira motivos e não invente causas para eventos ausentes.",
+      en: "Summarize only supplied post-service facts. Do not judge people, infer motives, or invent causes for missing events.",
+      es: "Resume solo los hechos posteriores suministrados. No juzgues personas, infieras motivos ni inventes causas de eventos ausentes.",
+    },
+  },
+  "musicscale.live.pre-service-risk.explain": {
+    id: "musicscale.live.pre-service-risk.explain",
+    taskId: "musicscale.live.pre-service-risk.explain",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Explique apenas riscos sustentados pelos fatos de preflight/ensaio fornecidos e indique ações seguras de preparação. Não execute comandos de provider.",
+      en: "Explain only risks supported by supplied preflight/rehearsal facts and point to safe preparation actions. Do not execute provider commands.",
+      es: "Explica solo riesgos sustentados por los hechos de preflight/ensayo suministrados e indica acciones seguras de preparación. No ejecutes comandos del proveedor.",
+    },
+  },
   "nestlume.entity.explain": {
     id: "nestlume.entity.explain",
     taskId: "nestlume.entity.explain",
