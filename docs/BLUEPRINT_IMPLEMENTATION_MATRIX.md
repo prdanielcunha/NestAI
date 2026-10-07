@@ -1,88 +1,79 @@
-# NestAI Blueprint Implementation Matrix
+# NestAI — Matriz de Implementação do Blueprint
 
-Canonical source: `NestAI_MillionsNest_AI_Platform_Blueprint_v1.0_2026-10-06.docx`.
+**Fonte canônica:** `NestAI_MillionsNest_AI_Platform_Blueprint_v1.0_2026-10-06.docx`  
+**Texto integral normalizado:** `docs/blueprint-source/` (4 partes)  
+**Atualização:** 2026-10-06  
+**Ambientes:** `main` = integração/QA; `production` = último release publicado.
 
-Status meanings:
-- **DONE**: implemented, tested and (when runtime-facing) deployed/verified.
-- **PARTIAL**: architecture or primitives exist, but the blueprint requirement is not fully satisfied.
-- **NOT STARTED**: material implementation is still missing.
-- **FUTURE**: explicitly marked future/non-MVP by the blueprint.
+Esta matriz registra evidências verificáveis. **Implementado** não significa automaticamente **validado ao vivo**, e nenhuma task passa a `DONE` apenas porque o código compila.
 
-This matrix is a release-control artifact. A phase is not complete merely because code compiles.
+### Estados
 
-## Roadmap phases (Blueprint §61)
+- **DONE:** requisito implementado, testado e, quando aplicável, validado em produção.
+- **PARTIAL:** parte funcional existe, mas falta requisito, integração, validação real ou aceite.
+- **BLOCKED:** existe dependência externa que exige ação humana ou permissão de terceiro.
+- **FUTURE:** item expressamente classificado como futuro no blueprint.
 
-| Phase | Blueprint scope | Status | Evidence / remaining work |
-| --- | --- | --- | --- |
-| F0 Canonical specification | blueprint, ADRs, naming, taxonomy, contracts | PARTIAL | Blueprint condensed in repo; ADR coverage incomplete; full source preservation pending. |
-| F1 Bootstrap | TS, pnpm, lint, tests, Actions, environments, domain, Worker, console shell | PARTIAL | Worker/CI/domain config exist; rendered console shell is missing. |
-| F2 Auth foundation | NestAI token, verification, App Check, app identity, org, capabilities, RBAC negatives | PARTIAL | Hub ES256/JWKS + tenant/app/capability and cross-tenant tests are live; Firebase App Check and server-to-server auth remain. |
-| F3 Provider adapters | Groq, Workers AI, Gemini, Mistral, streaming, structured output, provider health | PARTIAL | Groq + Workers AI exist. Gemini/Mistral, stream contract, structured output validation and provider health/circuit state remain. |
-| F4 Router + Policy | task/provider/model registries, routes, sensitivity, free eligibility, fallback | PARTIAL | Task/Model/Policy/router exist; Provider Registry, versioned routes, richer ranking/fallback/circuit logic remain. |
-| F5 ZERO COST | quotas, headroom, conserve, kill switches, paid hard lock, usage | PARTIAL | FREE_ONLY hard lock, D1 usage and burst rate limit exist; quota headroom/conserve/per-app/task kill switches and exhaustion simulation remain. |
-| F6 Observability | logs, metrics, traces, waterfall, provider health, alerts | PARTIAL | metadata-only trace exists; metrics, waterfall, OTEL, alerting and provider health dashboards remain. |
-| F7 Console premium | Overview, Apps, Tasks, Router, Providers, Prompts, Usage, Policies, Audit | NOT STARTED | UX/data contracts only; rendered React/Vite/Tailwind console is missing. |
-| F8 SDK | @millionsnest/ai run/stream/transcribe/vision/jobs/errors/auth | PARTIAL | thin run client exists; package publication and remaining APIs/errors/auth helpers remain. |
-| F9 Auto onboarding | manifest, validation, workflow, app registry, template | PARTIAL | in-code manifests exist; millionsnest.app.json, CI registration and repo template remain. |
-| F10 Evals | datasets, runner, dashboard, regression, comparison, prompt promotion | PARTIAL | releaseGate primitive exists; golden datasets/runner/dashboard/model+prompt promotion remain. |
-| F11 RAG | Vectorize, R2, ingest, evidence refs, auth filters | PARTIAL | tenant/sensitivity filtering primitives exist; Vectorize/R2/ingest/evidenceRefs/authorization pipeline remain. |
-| F12 Jobs/media | Queues, audio, vision, image, batch | PARTIAL | bounded job envelope exists; Cloudflare Queues and media execution pipelines remain. |
-| F13 App migration | Hub, Connect, NestLocal, MusicScale, NestFinance, NestJourney, NestAffiliate, NestLume | PARTIAL | Hub auth integration is live; consuming apps are not yet migrated to @millionsnest/ai and old provider-specific paths have not been fully removed. |
-| F14 Production hardening | load, chaos, red team, rate/quota simulation, rollback, incidents, DR | NOT STARTED | release gates/runbook seed exist; full hardening suite remains. |
+## Roadmap (§61)
 
-## MVP technical acceptance (Blueprint §94)
+| Fase | Estado | Evidência e restante |
+| --- | --- | --- |
+| F0 — Especificação canônica | PARTIAL | Blueprint integral em `docs/blueprint-source/`; ADRs 001–011, contratos e taxonomia no repositório. Falta reconciliação formal de cada requisito com implementação e aceite. |
+| F1 — Bootstrap | DONE | Worker/API, pnpm/TS, lint, Vitest, GitHub CI, D1, domínio `ai.millionsnest.com`, deploy + smoke e SPA de console entregues. |
+| F2 — Auth | PARTIAL | Hub ES256/JWKS, token curto, tenant/app/capabilities, App Check, admin global e guest restrito com testes. Falta smoke live autenticado de todos os apps + service-to-service completo. |
+| F3 — Providers | PARTIAL | Adapters Groq, Cloudflare, Gemini e Mistral, streaming, schema e circuit/fallback. Falta certificação live de cada modalidade/provider e revisão periódica de termos/modelos. |
+| F4 — Router/Policy | PARTIAL | Registries, privacy P0–P4, hard constraints, roteamento por modalidade e safe fallback. Falta console editável com versionamento/promoção e avaliação comparativa live. |
+| F5 — ZERO COST | PARTIAL | FREE_ONLY hard lock, quotas por provider/app/org/user, 80/20, reserve/conserve, kill switches e limites para imagem. Falta teste de exaustão real e conciliação contra consumo Cloudflare/Groq. |
+| F6 — Observability | PARTIAL | Metadata traces, health, SLO/alertas, incidentes e scheduler. Falta waterfall real completo, monitoramento de ponta a ponta e verificação de retenção. |
+| F7 — Mission Control | PARTIAL | SPA React/Vite/Tailwind responsiva com 12 áreas, PT/EN/ES, command palette, health e APIs admin protegidas. Vários painéis permanecem read-only; botões de edição/evals/reindex não são fluxos produtivos. Auditoria visual, acessibilidade WCAG AA e testes E2E ainda pendentes. |
+| F8 — SDK | PARTIAL | Pacote `@millionsnest/ai v0.1.0` publicado em GitHub Releases, run/stream/media/jobs/HUB token/App Check. `v0.2.0` guest e release imutável em QA. Falta instalação e chamadas reais dos consumidores. |
+| F9 — Auto-onboarding | DONE para registro | `millionsnest.app.json`, validação, GitHub OIDC, reusable workflow e **8/8 repos registrados com sucesso** em produção; não implica migração do código desses apps. |
+| F10 — Evaluation Lab | PARTIAL | Runner, thresholds, promotion gate e 80 golden cases sanitizados. Falta executar datasets contra providers reais, persistir métricas e bloquear releases via gate automático. |
+| F11 — RAG | PARTIAL / R2 BLOCKED | Vectorize `nestai-knowledge` criado; índices de metadata `appId`, `organizationHash`, `locale` e `sensitivity` provisionados; filtros e EvidenceRefs, IDs de fonte tenant-scoped. **R2 pendente:** erro Cloudflare `10042` exige habilitar R2 no painel. Falta smoke autenticado de ingest/query, retenção e exclusão. |
+| F12 — Jobs/Media | PARTIAL | KV, Queues `nestai-jobs`/`nestai-jobs-dlq`, APIs áudio/visão/embedding/imagem, job polling e retry. Falta certificação E2E de DLQ, retries, OCR, arquivos grandes e limites gratuitos. |
+| F13 — Migração dos apps | PARTIAL | 8/8 manifests e registro automático; Hub token/App Check integrado. **Ainda não concluída** a troca de chamadas diretas e instalação funcional do SDK em todos os apps. |
+| F14 — Hardening | PARTIAL | CI, security tests, simulações de caos, runbooks e smoke release. Faltam carga/soak, red-team, DR/restore testado, canary/rollback exercitado, auditoria WCAG e SLO observado. |
 
-| Requirement | Status |
-| --- | --- |
-| ai.millionsnest.com works | PARTIAL — custom domain attached; DNS/live smoke must pass |
-| canonical auth validated | DONE |
-| App Check validated | NOT STARTED |
-| Groq adapter works | PARTIAL — adapter implemented; live key/provider smoke not yet certified |
-| Workers AI adapter works | DONE for binding/deploy; authenticated live model call still needs certified smoke |
-| Gemini restriction works | PARTIAL — policy concept exists; Gemini adapter/explicit restriction tests missing |
-| Mistral adapter works | NOT STARTED |
-| Task Registry | DONE |
-| Model Registry | DONE |
-| Policy Engine | DONE |
-| deterministic routing | DONE |
-| streaming | NOT STARTED |
-| structured output validation | NOT STARTED |
-| circuit breaker | NOT STARTED |
-| safe fallback | PARTIAL |
-| quota | PARTIAL |
-| FREE_ONLY hard lock | DONE |
-| private-payload-free logs | DONE at application trace layer |
-| console health/usage | NOT STARTED |
-| SDK works | PARTIAL |
-| app demo without provider key | PARTIAL — test SDK exists; real ecosystem app demo pending |
-| cross-tenant negative tests | DONE |
-| CI/CD passes | DONE for current runtime release |
+## Critérios de aceite do MVP técnico (§94)
 
-## Experience acceptance (Blueprint §95)
+| Requisito | Estado | Evidência/pêndencia |
+| --- | --- | --- |
+| Domínio público e Worker | DONE | Deploy `production` com smoke no domínio. |
+| Auth canônica ES256/JWKS/tenant/app | DONE no core | Testes de assinatura/tenant; validação live app-a-app pendente. |
+| Firebase App Check | PARTIAL | reCAPTCHA Enterprise configurado e TTL 7 dias; smoke live de todos os clientes falta. |
+| Groq / Workers AI | PARTIAL | Adapters, quotas e policy implementados; modelos reais não certificados por task. |
+| Gemini Free restrito | DONE na policy | P2/P3 bloqueados por testes; live P0/P1 pendente. |
+| Mistral adapter | PARTIAL | Implementado, mas bloqueado no FREE_ONLY até elegibilidade/licença revisadas. |
+| Task/Model/Provider Registries | DONE como contratos | UI de edição versionada pendente. |
+| Privacy + router + fallback | DONE no core | Testes P4/cross-tenant; carga e falhas reais pendentes. |
+| Streaming SSE | DONE no core | Parser do SDK e stream Worker testados. |
+| Structured output | DONE no core | Validação Zod; grounded NestLume em certificação. |
+| Circuit breaker / quota / hard lock | DONE no core | Simulações; conciliação com limites externos pendente. |
+| Observability sem payload privado | PARTIAL | Logs metadata-only e `collectLog:false`; auditoria de todos os gateways pendente. |
+| Mission Control health/usage | DONE como leitura | Alterações administrativas completas pendentes. |
+| SDK publicado | DONE v0.1.0 | v0.2.0 e integração real pendentes. |
+| App sem provider secret | DONE no registro | 8 registros por OIDC em produção; migração de IA real pendente. |
+| D1 / KV / Queues / Vectorize | DONE em provisionamento | Recursos criados e bindings; end-to-end de Vectorize/Queues pendente. |
+| R2 | BLOCKED | Cloudflare respondeu `10042: Please enable R2 through the Cloudflare Dashboard`. |
+| CI/CD | DONE no release publicado | Nunca promover head vermelho. |
 
-Rendered premium console, responsive behavior, PT/EN/ES UI, WCAG AA, visual router, provider status, quota UX, explanatory errors, critical confirmations and guided empty states are **NOT YET COMPLETE**.
+## Aceite de experiência (§95)
 
-## Automatic integration acceptance (Blueprint §96)
+**PARTIAL.** Há 12 superfícies premium responsivas com i18n, mas **não** há certificação completa WCAG AA, testes mobile E2E, editor/publish funcional de prompt/routes/policies, fluxos de erro e confirmações críticas finalizados.
 
-The current SDK/app registry is only a foundation. The following remain required:
-- publish/install `@millionsnest/ai`;
-- `millionsnest.app.json` manifest;
-- CI auto-registration;
-- reusable app template;
-- authorized/unauthorized task contract tests from a real app repo;
-- proof that model changes do not require app deploy.
+## Integração automática (§96)
 
-## Definition of Done (Blueprint §97)
+**PARTIAL.** Auto-registro OIDC **8/8 comprovado** e SDK empacotado/publicado; ainda faltam:
+- instalação efetiva e lockfile reproduzível em cada repositório;
+- chamada autorizada, chamada negada e teste de privacidade a partir de cada consumidor;
+- substituição progressiva de provider-specific code com feature flags e rollback;
+- prova de troca de modelo no NestAI sem deploy do app;
+- remoção de credenciais de providers mantidas nos apps após cutover comprovado.
 
-NestAI is **NOT YET DEFINITION-OF-DONE**. The project remains in active implementation until security + architecture + real behavior + premium UX + mobile + i18n + accessibility + tests + observability + evidence are all approved.
+## Definition of Done (§97)
 
-## Explicit future items
+**NÃO ATINGIDA.** A conclusão requer evidência conjunta de produção, segurança, custo, experiência, acessibilidade, integração de todos os apps, observabilidade, regressão e recuperação. Bloqueios e testes ausentes são explícitos nesta matriz; não serão convertidos artificialmente em `DONE`.
 
-Blueprint §§89–93 are future-ready architecture, not current MVP blockers:
-- local/on-device AI;
-- voice agents;
-- customer-specific knowledge productization beyond current RAG foundation;
-- paid AI entitlements;
-- paid-tier quality SLAs.
+## Itens futuros (§§89–93)
 
-They must remain architecturally possible without forcing paid dependencies into the initial release.
+**FUTURE:** on-device AI, voice agents, monetização de conhecimento por cliente, entitlements pagos e SLAs premium. Devem continuar arquiteturalmente possíveis, mas **não serão habilitados no modo FREE_ONLY** sem aprovação posterior.
