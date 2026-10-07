@@ -73,6 +73,116 @@ const musicScaleLiveJsonSchema: JsonSchema = {
   },
 };
 
+const musicImportEnrichmentSchema = z.object({
+  sections: z.array(z.object({
+    name: z.string().min(1),
+    type: z.enum(["intro","verse","chorus","bridge","outro","unknown"]),
+  })),
+  sectionAnnotations: z.array(z.object({
+    section: z.string().min(1),
+    type: z.enum(["solo","riff","instrumental","interlude","intro","outro","technical","vocal","unknown"]),
+    instrument: z.enum(["guitar","acoustic_guitar","bass","keys","piano","synth","drums","sax","violin","strings","other","unknown"]),
+    confidence: z.enum(["high","medium","low"]),
+  })),
+  language: z.enum(["pt","en","es","unknown"]),
+  suggestedBpm: z.number().positive().nullable(),
+  suggestedRhythm: z.string().nullable(),
+  capitalizedTitle: z.string().nullable(),
+  capitalizedArtist: z.string().nullable(),
+  originalKey: z.string().nullable(),
+  warnings: z.array(z.string()),
+});
+
+const songSuggestionSchema = z.array(z.object({
+  id: z.string().optional(),
+  title: z.string().min(1),
+  artist: z.string(),
+  reason: z.string().min(1),
+  recommendedKey: z.string(),
+})).min(1).max(3);
+
+const setlistAnalysisSchema = z.object({
+  healthScore: z.number().int().min(0).max(100),
+  metrics: z.object({
+    fluidez: z.number().int().min(0).max(100),
+    energia: z.number().int().min(0).max(100),
+    tonalidade: z.number().int().min(0).max(100),
+    repeticao: z.number().int().min(0).max(100),
+    equilibrio: z.number().int().min(0).max(100),
+  }),
+  feedback: z.string().min(1),
+  suggestions: z.array(z.object({
+    type: z.string().min(1),
+    text: z.string().min(1),
+  })),
+  learningInsight: z.string(),
+});
+
+const releaseNoteSchema = z.object({
+  version: z.string().min(1),
+  title: z.object({ pt: z.string().min(1), en: z.string().min(1), es: z.string().min(1) }),
+  description: z.object({ pt: z.string().min(1), en: z.string().min(1), es: z.string().min(1) }),
+  highlights: z.object({
+    pt: z.array(z.string()).min(1).max(6),
+    en: z.array(z.string()).min(1).max(6),
+    es: z.array(z.string()).min(1).max(6),
+  }),
+  category: z.enum(["Novidades","Performance","Experiência","Inteligência","Estabilidade","Offline","Performance Mode","IA","Refinamentos"]),
+  isMajor: z.boolean(),
+});
+
+const musicImportEnrichmentJsonSchema: JsonSchema = {
+  type: "object", additionalProperties: false,
+  required: ["sections","sectionAnnotations","language","suggestedBpm","suggestedRhythm","capitalizedTitle","capitalizedArtist","originalKey","warnings"],
+  properties: {
+    sections: { type: "array", items: { type: "object", additionalProperties: false, required: ["name","type"], properties: { name: {type:"string"}, type: {enum:["intro","verse","chorus","bridge","outro","unknown"]} } } },
+    sectionAnnotations: { type: "array", items: { type: "object", additionalProperties: false, required: ["section","type","instrument","confidence"], properties: {
+      section:{type:"string"}, type:{enum:["solo","riff","instrumental","interlude","intro","outro","technical","vocal","unknown"]},
+      instrument:{enum:["guitar","acoustic_guitar","bass","keys","piano","synth","drums","sax","violin","strings","other","unknown"]},
+      confidence:{enum:["high","medium","low"]}
+    } } },
+    language: { enum: ["pt","en","es","unknown"] },
+    suggestedBpm: { type: ["number","null"] },
+    suggestedRhythm: { type: ["string","null"] },
+    capitalizedTitle: { type: ["string","null"] },
+    capitalizedArtist: { type: ["string","null"] },
+    originalKey: { type: ["string","null"] },
+    warnings: { type: "array", items: { type: "string" } },
+  },
+};
+
+const songSuggestionJsonSchema: JsonSchema = {
+  type: "array", minItems: 1, maxItems: 3,
+  items: { type: "object", additionalProperties: false, required: ["title","artist","reason","recommendedKey"], properties: {
+    id:{type:"string"}, title:{type:"string"}, artist:{type:"string"}, reason:{type:"string"}, recommendedKey:{type:"string"}
+  } }
+};
+
+const setlistAnalysisJsonSchema: JsonSchema = {
+  type: "object", additionalProperties: false, required: ["healthScore","metrics","feedback","suggestions","learningInsight"],
+  properties: {
+    healthScore:{type:"integer",minimum:0,maximum:100},
+    metrics:{type:"object",additionalProperties:false,required:["fluidez","energia","tonalidade","repeticao","equilibrio"],properties:{
+      fluidez:{type:"integer",minimum:0,maximum:100},energia:{type:"integer",minimum:0,maximum:100},tonalidade:{type:"integer",minimum:0,maximum:100},repeticao:{type:"integer",minimum:0,maximum:100},equilibrio:{type:"integer",minimum:0,maximum:100}
+    }},
+    feedback:{type:"string"},
+    suggestions:{type:"array",items:{type:"object",additionalProperties:false,required:["type","text"],properties:{type:{type:"string"},text:{type:"string"}}}},
+    learningInsight:{type:"string"},
+  },
+};
+
+const releaseNoteJsonSchema: JsonSchema = {
+  type:"object", additionalProperties:false, required:["version","title","description","highlights","category","isMajor"],
+  properties:{
+    version:{type:"string"},
+    title:{type:"object",additionalProperties:false,required:["pt","en","es"],properties:{pt:{type:"string"},en:{type:"string"},es:{type:"string"}}},
+    description:{type:"object",additionalProperties:false,required:["pt","en","es"],properties:{pt:{type:"string"},en:{type:"string"},es:{type:"string"}}},
+    highlights:{type:"object",additionalProperties:false,required:["pt","en","es"],properties:{pt:{type:"array",items:{type:"string"}},en:{type:"array",items:{type:"string"}},es:{type:"array",items:{type:"string"}}}},
+    category:{enum:["Novidades","Performance","Experiência","Inteligência","Estabilidade","Offline","Performance Mode","IA","Refinamentos"]},
+    isMajor:{type:"boolean"}
+  }
+};
+
 const affiliateProductSchema = z.object({
   facts: z.array(z.string()),
   opportunities: z.array(z.string()),
@@ -204,6 +314,10 @@ export const structuredContracts: Record<string, StructuredContract> = {
       },
     },
   },
+  "musicscale.song.import.enrich": { id: "musicscale.song.import.enrich.v1", schema: musicImportEnrichmentSchema, jsonSchema: musicImportEnrichmentJsonSchema },
+  "musicscale.song.suggest": { id: "musicscale.song.suggest.v1", schema: songSuggestionSchema, jsonSchema: songSuggestionJsonSchema },
+  "musicscale.setlist.analyze": { id: "musicscale.setlist.analyze.v1", schema: setlistAnalysisSchema, jsonSchema: setlistAnalysisJsonSchema },
+  "musicscale.release-note.generate": { id: "musicscale.release-note.generate.v1", schema: releaseNoteSchema, jsonSchema: releaseNoteJsonSchema },
   "musicscale.live.diagnostic.explain": { id: "musicscale.live.diagnostic.explain.v1", schema: musicScaleLiveSchema, jsonSchema: musicScaleLiveJsonSchema },
   "musicscale.live.song-match.assist": { id: "musicscale.live.song-match.assist.v1", schema: musicScaleLiveSchema, jsonSchema: musicScaleLiveJsonSchema },
   "musicscale.live.request.classify": { id: "musicscale.live.request.classify.v1", schema: musicScaleLiveSchema, jsonSchema: musicScaleLiveJsonSchema },
