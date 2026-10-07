@@ -1641,4 +1641,50 @@ export async function handleScheduled(_controller: unknown, env: Env): Promise<v
   await evaluateSloAlerts(env.DB);
 }
 
-export default { fetch: handleRequest, queue: handleQueueBatch, scheduled: handleScheduled };
+const allowedBrowserOrigins = new Set([
+  "https://ai.millionsnest.com",
+  "https://millionsnest.com",
+  "https://www.millionsnest.com",
+  "https://musicscale.millionsnest.com",
+  "https://nestfinance.millionsnest.com",
+  "https://connect.millionsnest.com",
+  "https://nestlocal.millionsnest.com",
+  "https://nestjourney.millionsnest.com",
+  "https://nestlume.millionsnest.com",
+  "https://nestaffiliate.millionsnest.com",
+]);
+
+export async function handleBrowserRequest(request: Request, env: Env): Promise<Response> {
+  const origin = request.headers.get("origin");
+  const corsAllowed = origin !== null && allowedBrowserOrigins.has(origin);
+  const url = new URL(request.url);
+  const isApi = url.pathname.startsWith("/v1/") || url.pathname === "/health";
+
+  if (request.method === "OPTIONS" && isApi) {
+    if (!corsAllowed) return new Response(null, { status: 403 });
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "access-control-allow-origin": origin,
+        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-headers": "authorization, content-type, accept, x-firebase-appcheck, x-millionsnest-app, x-millionsnest-org, x-request-id",
+        "access-control-max-age": "600",
+        "vary": "Origin",
+        "cache-control": "no-store",
+      },
+    });
+  }
+
+  const response = await handleRequest(request, env);
+  if (!corsAllowed || !isApi) return response;
+  const headers = new Headers(response.headers);
+  headers.set("access-control-allow-origin", origin);
+  headers.set("vary", headers.has("vary") ? headers.get("vary") + ", Origin" : "Origin");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+export default { fetch: handleBrowserRequest, queue: handleQueueBatch, scheduled: handleScheduled };
