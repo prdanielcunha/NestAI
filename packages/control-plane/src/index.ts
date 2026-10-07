@@ -629,3 +629,72 @@ export async function getActivePromptOverride(
     return null;
   }
 }
+
+
+export async function controlPlanePromptsResolved(db: D1DatabaseLike) {
+  const base = controlPlanePrompts();
+  const rows = await db.prepare(
+    "SELECT p.prompt_id,p.current_version,v.content_json FROM cp_prompts p JOIN cp_prompt_versions v ON v.prompt_id=p.prompt_id AND v.version=p.current_version"
+  ).all<{ prompt_id: string; current_version: number; content_json: string }>();
+  const active = new Map((rows.results ?? []).map((row)=>[row.prompt_id,row]));
+  return base.map((prompt)=>{
+    const row = active.get(prompt.id);
+    if (!row) return { ...prompt, instructions: prompts[prompt.id]?.instructions ?? {}, currentVersion: prompt.version };
+    let instructions = prompts[prompt.id]?.instructions ?? {};
+    try {
+      const parsed = JSON.parse(row.content_json) as Record<string, unknown>;
+      if ("instructions" in parsed) {
+        instructions = {
+          ...instructions,
+          ...validatePromptDraft(prompt.id, parsed as DynamicPromptDraft).instructions,
+        };
+      }
+    } catch {
+      // Fail closed to the static prompt if a persisted override is malformed.
+    }
+    return { ...prompt, version: Number(row.current_version), currentVersion: Number(row.current_version), instructions };
+  });
+}
+
+export async function controlPlaneRoutesResolved(db: D1DatabaseLike) {
+  const base = controlPlaneRoutes();
+  const rows = await db.prepare(
+    "SELECT r.route_id,r.current_version,v.config_json FROM cp_routes r JOIN cp_route_versions v ON v.route_id=r.route_id AND v.version=r.current_version"
+  ).all<{ route_id: string; current_version: number; config_json: string }>();
+  const active = new Map((rows.results ?? []).map((row)=>[row.route_id,row]));
+  return base.map((route)=>{
+    const row = active.get(route.id);
+    if (!row) return { ...route, currentVersion: route.version, providerOrder: route.candidates.map((candidate)=>candidate.provider) };
+    let providerOrder = route.candidates.map((candidate)=>candidate.provider);
+    try {
+      const parsed = JSON.parse(row.config_json) as Record<string, unknown>;
+      if ("providerOrder" in parsed) providerOrder = validateRouteDraft(route.task, parsed as DynamicRouteDraft).providerOrder;
+    } catch {
+      // Preserve deterministic static order on malformed persisted state.
+    }
+    return { ...route, version: Number(row.current_version), currentVersion: Number(row.current_version), providerOrder };
+  });
+}
+
+export async function controlPlanePoliciesResolved(db: D1DatabaseLike) {
+  const base = controlPlanePolicies();
+  const row = await db.prepare(
+    "SELECT p.current_version,v.config_json FROM cp_policies p JOIN cp_policy_versions v ON v.policy_id=p.policy_id AND v.version=p.current_version WHERE p.policy_id='core'"
+  ).first<{ current_version: number; config_json: string }>();
+  let extraBlockedProviders: string[] = [];
+  if (row) {
+    try {
+      const parsed = JSON.parse(row.config_json) as Record<string, unknown>;
+      if ("extraBlockedProviders" in parsed) {
+        extraBlockedProviders = validatePolicyDraft(parsed as DynamicPolicyDraft).extraBlockedProviders;
+      }
+    } catch {
+      extraBlockedProviders = [];
+    }
+  }
+  return {
+    ...base,
+    currentVersion: Number(row?.current_version ?? 1),
+    extraBlockedProviders,
+  };
+}
