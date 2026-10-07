@@ -1013,6 +1013,176 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     }
   }
 
+  if (request.method === "POST" && url.pathname === "/v1/admin/config/drafts") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    try {
+      const claims = await authenticateAdminRequest(request, env);
+      const body = await request.json() as { resource?: string; id?: string; config?: unknown };
+      const resource = String(body.resource ?? "");
+      const id = String(body.id ?? "");
+      let result;
+      if (resource === "prompt") {
+        result = await createControlPlaneDraft(env.DB, {
+          resource: "prompt",
+          id,
+          config: (body.config ?? {}) as { instructions: Partial<Record<"pt-BR" | "en" | "es", string>> },
+          actorId: claims.sub,
+        });
+      } else if (resource === "route") {
+        result = await createControlPlaneDraft(env.DB, {
+          resource: "route",
+          id,
+          config: (body.config ?? {}) as { providerOrder: string[] },
+          actorId: claims.sub,
+        });
+      } else if (resource === "policy" && id === "core") {
+        result = await createControlPlaneDraft(env.DB, {
+          resource: "policy",
+          id: "core",
+          config: (body.config ?? {}) as { extraBlockedProviders: string[] },
+          actorId: claims.sub,
+        });
+      } else {
+        throw new Error("CONTROL_PLANE_RESOURCE_INVALID");
+      }
+      return json({ requestId, ...result }, 201);
+    } catch (error) {
+      const code = errorCode(error);
+      return json({ requestId, error: code }, code.startsWith("CONTROL_PLANE_") ? 422 : statusFor(code));
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/admin/config/promote") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    try {
+      const claims = await authenticateAdminRequest(request, env);
+      const body = await request.json() as { resource?: "prompt" | "route" | "policy"; id?: string; version?: number };
+      if (!body.resource || !body.id || !Number.isInteger(body.version)) throw new Error("CONTROL_PLANE_PROMOTION_INVALID");
+      const result = await promoteControlPlaneDraft(env.DB, {
+        resource: body.resource,
+        id: body.id,
+        version: Number(body.version),
+        actorId: claims.sub,
+      });
+      return json({ requestId, ...result });
+    } catch (error) {
+      const code = errorCode(error);
+      return json({ requestId, error: code }, code.startsWith("CONTROL_PLANE_") ? 422 : statusFor(code));
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/admin/prompts/evaluate") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    const started = Date.now();
+    let promptId = "";
+    let version = 0;
+    let actorId = "";
+    try {
+      const claims = await authenticateAdminRequest(request, env);
+      actorId = claims.sub;
+      const body = await request.json() as {
+        promptId?: string;
+        version?: number;
+        locale?: Locale;
+        input?: unknown;
+        sanitized?: boolean;
+        sensitivity?: "P0_PUBLIC" | "P1_INTERNAL";
+      };
+      promptId = String(body.promptId ?? "");
+      version = Number(body.version ?? 0);
+      if (!body.sanitized) throw new Error("CONTROL_PLANE_PROMPT_EVAL_SANITIZED_REQUIRED");
+      if (body.sensitivity !== "P0_PUBLIC" && body.sensitivity !== "P1_INTERNAL") {
+        throw new Error("CONTROL_PLANE_PROMPT_EVAL_SENSITIVITY_DENIED");
+      }
+      const locale = body.locale === "en" || body.locale === "es" ? body.locale : "pt-BR";
+      const task = getTask(promptId);
+      if (task.modality !== "text") throw new Error("CONTROL_PLANE_PROMPT_EVAL_TEXT_ONLY");
+      const instructions = await getPromptDraftInstructions(env.DB, promptId, version);
+      const privacy = classifyPrivacy(body.input, body.sensitivity);
+      if (!privacy.externalAllowed) throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
+
+      const parsed = TaskRequest.parse({
+        task: task.id,
+        input: body.input ?? "Synthetic evaluation input.",
+        context: { organizationId: "global", locale },
+      });
+      const prepared: PreparedTaskExecution = {
+        parsed,
+        task,
+        organizationId: "global",
+        claims,
+        sensitivity: body.sensitivity,
+        locale,
+      };
+      const structured = getStructuredContract(task.id);
+      const candidates = await safeCandidates(env, prepared, "text", structured !== null);
+      const prompt = buildTaskPrompt({
+        taskId: task.id,
+        locale,
+        input: body.input ?? "Synthetic evaluation input.",
+        instructionsOverride: instructions,
+        promptVersionOverride: version,
+      });
+      const execution = await executeWithSafeFallback({
+        candidates,
+        keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
+        breaker,
+        maxRetriesPerCandidate: 1,
+        execute: async ({ candidate }) => {
+          await recordProviderAttempt(env, claims, task, "global", candidate.provider);
+          return withTimeout(
+            (signal) => generateForRoute(env, {
+              route: candidate,
+              messages: prompt.messages,
+              maxTokens: task.maxOutputTokens,
+              signal,
+            }),
+            task.timeoutMs,
+          );
+        },
+      });
+      const validated = validateStructuredText(task.id, execution.result.text);
+      const latencyMs = Date.now() - started;
+      const runId = await recordPromptDraftEvaluation(env.DB, {
+        promptId,
+        version,
+        passed: true,
+        latencyMs,
+        actorId,
+        report: {
+          sanitized: true,
+          sensitivity: body.sensitivity,
+          provider: execution.result.provider,
+          model: execution.result.model,
+          structured: structured !== null,
+          outputStored: false,
+        },
+      });
+      return json({
+        requestId,
+        runId,
+        promptId,
+        version,
+        latencyMs,
+        result: validated,
+        meta: { providerClass: "free", fallbackUsed: execution.fallbackUsed, retries: execution.retries },
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      if (actorId && promptId && Number.isInteger(version) && version > 0) {
+        await recordPromptDraftEvaluation(env.DB, {
+          promptId,
+          version,
+          passed: false,
+          latencyMs: Date.now() - started,
+          actorId,
+          report: { errorCode: code, outputStored: false },
+        }).catch(() => undefined);
+      }
+      return json({ requestId, error: code }, code.startsWith("CONTROL_PLANE_") ? 422 : statusFor(code));
+    }
+  }
+
   if (request.method === "POST" && url.pathname === "/v1/admin/evals/probe") {
     const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
     const started = Date.now();
