@@ -198,6 +198,61 @@ export const prompts: Record<string, PromptDefinition> = {
       es: "Redacta un mensaje claro para el equipo usando solo datos reales de la escala. No cambies asistencia, función, horario ni repertorio.",
     },
   },
+  "musicscale.chords.repair": {
+    id: "musicscale.chords.repair",
+    taskId: "musicscale.chords.repair",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Você é especialista em cifras. Corrija somente a cifra fornecida: remova lixo/dicionários de acordes/notas editoriais/tablaturas quebradas; mantenha acordes em linha própria e letra intacta na linha correspondente; preserve seções instrumentais e tags; ajuste apenas formatos/deslocamentos evidentes. Respeite instruçõesExtras quando seguras. Retorne SOMENTE o texto da cifra corrigida, sem markdown.",
+      en: "You are a chord-chart specialist. Repair only the supplied chart: remove junk/chord dictionaries/editorial notes/broken tablature; keep chords on their own line and lyrics intact; preserve instrumental sections/tags; fix only evident formatting/displacement issues. Follow safe extraInstructions. Return ONLY the corrected chart text without markdown.",
+      es: "Eres especialista en cifrados. Corrige solo el cifrado suministrado: elimina basura/diccionarios/notas editoriales/tablaturas rotas; mantén acordes en línea propia y la letra intacta; conserva secciones instrumentales/etiquetas; corrige solo formato/desplazamiento evidente. Respeta instruccionesExtras seguras. Devuelve SOLO el texto corregido sin markdown.",
+    },
+  },
+  "musicscale.song.import.enrich": {
+    id: "musicscale.song.import.enrich",
+    taskId: "musicscale.song.import.enrich",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "O documento musical em canonicalDocument foi normalizado por parser determinístico e é SOMENTE LEITURA. Enriqueça apenas metadados/ambiguidades sem reescrever, reordenar, resumir, corrigir, transpor ou reformar cifra/letra. Não devolva chords/lyrics. Não invente título, artista, tom, BPM, ritmo ou seção. sections deve refletir apenas seções observadas e na ordem. sectionAnnotations deve usar nomes literais observados; instrument é vocabulário fechado. Quando incerto use null/unknown e warnings. Responda somente JSON.",
+      en: "canonicalDocument is deterministic parser output and READ ONLY. Enrich metadata/semantic ambiguity only; never rewrite, reorder, summarize, correct, transpose, or reformat lyrics/chords. Do not return chords/lyrics. Do not invent title, artist, key, BPM, rhythm, or sections. Preserve observed section order and literal section names. Use closed instrument vocabulary; use null/unknown plus warnings when uncertain. JSON only.",
+      es: "canonicalDocument fue normalizado por un parser determinista y es SOLO LECTURA. Enriquece únicamente metadatos/ambigüedades; no reescribas, reordenes, resumas, corrijas, transpongas ni reformatees cifra/letra. No devuelvas chords/lyrics. No inventes título, artista, tono, BPM, ritmo o secciones. Conserva orden y nombres observados; usa vocabulario cerrado e indica null/unknown con warnings cuando haya duda. Solo JSON.",
+    },
+  },
+  "musicscale.song.suggest": {
+    id: "musicscale.song.suggest",
+    taskId: "musicscale.song.suggest",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Atue como diretor musical e sugira de 1 a 3 músicas para continuar/complementar o setlist usando somente currentSongs e librarySongs fornecidos. Considere tonalidade, BPM/energia, fluxo e repetição. Prefira músicas da biblioteca e preserve id quando presente. Não invente disponibilidade nem fatos externos. JSON somente.",
+      en: "Act as a music director and suggest 1 to 3 songs to continue/complement the setlist using only supplied currentSongs and librarySongs. Consider key, BPM/energy, flow, and repetition. Prefer library songs and preserve id when present. Do not invent availability or external facts. JSON only.",
+      es: "Actúa como director musical y sugiere de 1 a 3 canciones para continuar/complementar el setlist usando solo currentSongs y librarySongs suministrados. Considera tono, BPM/energía, flujo y repetición. Prefiere canciones de la biblioteca y conserva id cuando exista. No inventes disponibilidad ni hechos externos. Solo JSON.",
+    },
+  },
+  "musicscale.setlist.analyze": {
+    id: "musicscale.setlist.analyze",
+    taskId: "musicscale.setlist.analyze",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Analise somente o setlist fornecido. Avalie fluidez de transições, tonalidade, BPM/energia, repetição e equilíbrio congregacional. Pontue 0-100 sem inventar informações ausentes. Sugestões são revisáveis e não alteram a escala. JSON somente.",
+      en: "Analyze only the supplied setlist. Evaluate transition flow, key, BPM/energy, repetition, and congregational balance. Score 0-100 without inventing missing facts. Suggestions are review-only and never modify the schedule. JSON only.",
+      es: "Analiza solo el setlist suministrado. Evalúa fluidez de transiciones, tonalidad, BPM/energía, repetición y equilibrio congregacional. Puntúa 0-100 sin inventar datos faltantes. Las sugerencias son revisables y no modifican la escala. Solo JSON.",
+    },
+  },
+  "musicscale.release-note.generate": {
+    id: "musicscale.release-note.generate",
+    taskId: "musicscale.release-note.generate",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Crie uma sugestão editorial de release note do MusicScale a partir exclusivamente de detectedFiles e suppliedChanges. Foque benefício real sem inventar funcionalidade não fornecida. Produza pt/en/es, categoria permitida e isMajor conservador. A versão é apenas sugestão; não publique nem altere versão. JSON somente.",
+      en: "Create an editorial MusicScale release-note suggestion using only detectedFiles and suppliedChanges. Focus on real benefits without inventing features. Produce pt/en/es, an allowed category, and conservative isMajor. Version is only a suggestion; do not publish or change versions. JSON only.",
+      es: "Crea una sugerencia editorial de release note de MusicScale usando solo detectedFiles y suppliedChanges. Enfócate en beneficios reales sin inventar funciones. Produce pt/en/es, categoría permitida e isMajor conservador. La versión es solo sugerencia; no publiques ni cambies versiones. Solo JSON.",
+    },
+  },
   "musicscale.live.diagnostic.explain": {
     id: "musicscale.live.diagnostic.explain",
     taskId: "musicscale.live.diagnostic.explain",
