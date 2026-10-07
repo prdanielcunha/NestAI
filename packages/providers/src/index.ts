@@ -395,6 +395,42 @@ export async function extractDocumentTextWithCloudflare(
   return { text: item.data, ...(item.tokens !== undefined ? { tokens: item.tokens } : {}) };
 }
 
+export async function extractDocumentsTextWithCloudflare(
+  ai:WorkersAiBinding,
+  args:{
+    files:Array<{base64:string;mimeType:string;fileName:string;label?:string}>;
+    locale:"pt-BR"|"en"|"es";
+  },
+):Promise<Array<{fileName:string;label?:string;text:string;tokens?:number}>> {
+  if(!ai.toMarkdown) throw new Error("PROVIDER_MARKDOWN_CONVERSION_UNAVAILABLE");
+  if(args.files.length<1 || args.files.length>40) throw new Error("PROVIDER_DOCUMENT_BATCH_INVALID");
+  const result=await ai.toMarkdown(
+    args.files.map((file)=>({
+      name:file.fileName,
+      blob:new Blob([bytesToArrayBuffer(base64Bytes(file.base64))],{type:file.mimeType}),
+    })),
+    {
+      conversionOptions:{
+        output:{format:"text"},
+        image:{descriptionLanguage:args.locale==="pt-BR"?"pt":args.locale},
+        pdf:{metadata:false},
+      },
+    },
+  );
+  const items=Array.isArray(result)?result:[result];
+  if(items.length!==args.files.length) throw new Error("PROVIDER_DOCUMENT_BATCH_MISMATCH");
+  return items.map((item,index)=>{
+    const source=args.files[index]!;
+    if(!item || item.format==="error" || !item.data) throw new Error("PROVIDER_DOCUMENT_CONVERSION_FAILED");
+    return {
+      fileName:source.fileName,
+      ...(source.label?{label:source.label}:{}),
+      text:item.data,
+      ...(item.tokens!==undefined?{tokens:item.tokens}:{}),
+    };
+  });
+}
+
 export async function embedWithCloudflare(
   ai:WorkersAiBinding,
   model:string,
