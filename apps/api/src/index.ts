@@ -41,11 +41,12 @@ import { CircuitBreaker, executeWithSafeFallback } from "../../../packages/resil
 import type { Locale } from "../../../packages/i18n/src/index.js";
 import { cacheGet, cachePut, type KvNamespaceLike } from "../../../packages/cache/src/index.js";
 import { createJob, enqueueJob, getJobForScope, getJobResult, nextAttempt, putJobResult, retryDelaySeconds, updateJobStatus, type JobEnvelope, type QueueLike } from "../../../packages/jobs/src/index.js";
-import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit, controlPlaneRoutes, controlPlanePrompts, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota, syncStaticControlPlane } from "../../../packages/control-plane/src/index.js";
+import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit, controlPlaneRoutes, controlPlanePrompts, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota, syncStaticControlPlane, recordEvaluationProbe } from "../../../packages/control-plane/src/index.js";
 import { validateAppManifest, assertManifestTaskOwnership, persistAppManifest } from "../../../packages/app-manifest/src/index.js";
 import { verifyGitHubWorkloadToken } from "../../../packages/workload-auth/src/index.js";
 import { queryKnowledge, upsertKnowledge, persistKnowledgeSource, ragOrganizationHash, ragScopedSourceId, applyRerankResults, type VectorizeLike, type RetrievedEvidence } from "../../../packages/rag/src/index.js";
 import { getR2Usage, putR2Object, r2Utf8Size, reconcileR2Inventory, type R2BucketLike } from "../../../packages/r2-storage/src/index.js";
+import { assertEvalTargetAllowed } from "../../../packages/evaluation-lab/src/index.js";
 
 type RateLimiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
 
@@ -993,6 +994,90 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     } catch (error) {
       const code = errorCode(error);
       return json({ error: code }, statusFor(code));
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/admin/evals/probe") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    const started = Date.now();
+    try {
+      await authenticateAdminRequest(request, env);
+      const body = await request.json() as {
+        targetId?: string;
+        sanitized?: boolean;
+        sensitivity?: "P0_PUBLIC" | "P1_INTERNAL" | "P2_PERSONAL" | "P3_SENSITIVE" | "P4_RESTRICTED";
+        prompt?: string;
+        texts?: string[];
+        query?: string;
+        contexts?: string[];
+      };
+      const target = assertEvalTargetAllowed({
+        targetId: String(body.targetId ?? ""),
+        sanitized: body.sanitized === true,
+        sensitivity: body.sensitivity ?? "P0_PUBLIC",
+        customerTraffic: false,
+      });
+
+      let result: unknown;
+      if (target.kind === "text_model") {
+        if (typeof body.prompt !== "string" || !body.prompt.trim()) throw new Error("EVAL_PROMPT_REQUIRED");
+        const route: RouteDecision = {
+          modelId: target.id as RouteDecision["modelId"],
+          provider: target.provider,
+          providerModelId: target.modelId,
+          reason: ["evaluation_lab_only", "sanitized_input_required"],
+        };
+        const requestPayload: GenerateRequest = {
+          route,
+          messages: [{ role: "user", content: body.prompt }],
+          maxTokens: 512,
+        };
+        result = target.provider === "nvidia-nim"
+          ? await generateWithNvidiaEval(env.NVIDIA_API_KEY ?? "", requestPayload)
+          : await generateWithGroq(env.GROQ_API_KEY ?? "", requestPayload);
+      } else if (target.kind === "embedding_model") {
+        if (target.provider !== "cloudflare") throw new Error("EVAL_TARGET_PROVIDER_INVALID");
+        const texts = Array.isArray(body.texts) ? body.texts.filter((item): item is string => typeof item === "string").slice(0, 16) : [];
+        if (texts.length === 0) throw new Error("EVAL_TEXTS_REQUIRED");
+        result = {
+          vectors: await embedWithCloudflare(env.AI, target.modelId, texts),
+        };
+      } else {
+        if (target.provider !== "cloudflare") throw new Error("EVAL_TARGET_PROVIDER_INVALID");
+        if (typeof body.query !== "string" || !body.query.trim()) throw new Error("EVAL_QUERY_REQUIRED");
+        const contexts = Array.isArray(body.contexts)
+          ? body.contexts.filter((item): item is string => typeof item === "string").slice(0, 32)
+          : [];
+        if (contexts.length === 0) throw new Error("EVAL_CONTEXTS_REQUIRED");
+        result = await rerankWithCloudflare(env.AI, body.query, contexts, Math.min(10, contexts.length));
+      }
+
+      const latencyMs = Date.now() - started;
+      const runId = await recordEvaluationProbe(env.DB, {
+        targetId: target.id,
+        provider: target.provider,
+        modelId: target.modelId,
+        kind: target.kind,
+        latencyMs,
+        passed: true,
+        report: {
+          sanitized: true,
+          sensitivity: body.sensitivity ?? "P0_PUBLIC",
+          outputStored: false,
+        },
+      });
+
+      return json({
+        requestId,
+        runId,
+        target: target.id,
+        stage: target.stage,
+        latencyMs,
+        result,
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      return json({ requestId, error: code }, code.startsWith("EVAL_") ? 422 : statusFor(code));
     }
   }
 
