@@ -89,7 +89,9 @@ try {
   r2Ready=true;
 } catch (error) {
   const detail=String(error?.stderr??error?.message??error);
-  console.warn("NESTAI_R2_BLOCKED="+detail.split("\n")[0]);
+  const diagnostic = detail.replace(/\/accounts\/[a-f0-9]{32}/gi, "/accounts/***").replace(/Bearer\s+\S+/gi, "Bearer ***").slice(0, 1200);
+  console.warn("NESTAI_R2_DIAGNOSTIC=" + diagnostic);
+  console.warn("NESTAI_R2_BLOCKED=true");
   delete config.r2_buckets;
 }
 
