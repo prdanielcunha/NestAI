@@ -91,8 +91,23 @@ try {
 
 let r2Ready=false;
 try {
-  createIfMissing(["r2","bucket","create","nestai-knowledge"],"R2_NESTAI_KNOWLEDGE");
+  createIfMissing(["r2","bucket","create","nestai-knowledge","--storage-class=Standard"],"R2_NESTAI_KNOWLEDGE");
   config.r2_buckets=[{binding:"KNOWLEDGE_BUCKET",bucket_name:"nestai-knowledge"}];
+
+  // Keep transient/rebuildable artifacts short-lived. Never transition to
+  // Infrequent Access because the R2 free tier applies only to Standard.
+  const lifecycleRules = [
+    ["nestai-tmp-expire","tmp/","2"],
+    ["nestai-jobs-expire","jobs/","7"],
+    ["nestai-artifacts-expire","artifacts/","14"],
+    ["nestai-evals-expire","evals/","30"],
+  ];
+  for (const [id,prefix,days] of lifecycleRules) {
+    createIfMissing(
+      ["r2","bucket","lifecycle","add","nestai-knowledge",id,prefix,"--expire-days="+days],
+      "R2_LIFECYCLE_"+id.toUpperCase().replaceAll("-","_"),
+    );
+  }
   r2Ready=true;
 } catch (error) {
   const detail=String(error?.stderr??error?.message??error);
@@ -107,7 +122,7 @@ config.vars={
   AI_CACHE_ENABLED:"true",
   AI_JOBS_ENABLED:"true",
   AI_VECTORIZE_ENABLED:vectorizeReady?"true":"false",
-  AI_R2_WRITES_ENABLED:"false"
+  AI_R2_WRITES_ENABLED:r2Ready?"true":"false"
 };
 
 writeFileSync(configPath,JSON.stringify(config,null,2)+"\n");
