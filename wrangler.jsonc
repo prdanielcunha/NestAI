@@ -43,7 +43,7 @@
     "AI_R2_WRITES_ENABLED": "true",
     "AI_PROMPT_GUARD_ENABLED": "true",
     "AI_RAG_RERANK_ENABLED": "true",
-    "AI_BGE_M3_ENABLED": "false",
+    "AI_BGE_M3_ENABLED": "true",
     "AI_LOCAL_WEBGPU_ENABLED": "false",
     "AI_NVIDIA_EVAL_ENABLED": "true",
     "AI_HUB_ENABLED": "true",
