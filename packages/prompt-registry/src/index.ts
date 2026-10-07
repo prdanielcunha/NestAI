@@ -72,9 +72,9 @@ export const prompts: Record<string, PromptDefinition> = {
     version: 1,
     systemPolicy: sharedSystemPolicy,
     instructions: {
-      "pt-BR": "A partir do texto OCR fornecido, extraia somente candidatos visíveis da ficha. Não cadastre ninguém, não complete letra ilegível e marque revisão humana obrigatória.",
-      en: "From the supplied OCR text, extract only visible form candidates. Do not register anyone, do not guess unreadable text, and require human review.",
-      es: "A partir del texto OCR suministrado, extrae solo candidatos visibles de la ficha. No registres a nadie, no adivines texto ilegible y exige revisión humana.",
+      "pt-BR": "A partir do texto OCR fornecido, extraia somente candidatos visíveis da ficha. Não cadastre ninguém, não complete letra ilegível e marque revisão humana obrigatória. Quando input.context.formType for team_interest_list, use fields no formato row_<n>.name e row_<n>.<areaId>, onde areaId é somente presence, table, care, house, discipleship ou support. Para áreas, devolva apenas o valor/mark visível; nunca marque uma área por inferência.",
+      en: "From the supplied OCR text, extract only visible form candidates. Do not register anyone, do not guess unreadable text, and require human review. When input.context.formType is team_interest_list, use fields formatted as row_<n>.name and row_<n>.<areaId>, where areaId is only presence, table, care, house, discipleship, or support. For areas return only the visible value/mark; never infer a selection.",
+      es: "A partir del texto OCR suministrado, extrae solo candidatos visibles de la ficha. No registres a nadie, no adivines texto ilegible y exige revisión humana. Cuando input.context.formType sea team_interest_list, usa campos row_<n>.name y row_<n>.<areaId>, donde areaId es solo presence, table, care, house, discipleship o support. Para áreas devuelve solo la marca/valor visible; nunca infieras una selección.",
     },
   },
   "affiliate.pin.copy": {
