@@ -10,6 +10,18 @@ export const R2_FREE_TIER = {
   classBOps: 10_000_000,
 } as const;
 
+// R2 free usage is account-level. NestAI intentionally budgets only 20% of
+// the published Standard-storage free allowance so unrelated buckets retain
+// 80% headroom. This is a fail-closed safety allocation, not a claim that
+// NestAI can observe every R2 consumer in the Cloudflare account.
+export const R2_NESTAI_ACCOUNT_SHARE = 0.20;
+
+export const R2_EFFECTIVE_BUDGET = {
+  storageBytes: Math.floor(R2_FREE_TIER.storageBytes * R2_NESTAI_ACCOUNT_SHARE),
+  classAOps: Math.floor(R2_FREE_TIER.classAOps * R2_NESTAI_ACCOUNT_SHARE),
+  classBOps: Math.floor(R2_FREE_TIER.classBOps * R2_NESTAI_ACCOUNT_SHARE),
+} as const;
+
 export const R2_SAFETY = {
   warnFraction: 0.50,
   conserveFraction: 0.60,
@@ -62,9 +74,9 @@ export async function getR2Usage(db: D1DatabaseLike, now = new Date()): Promise<
   const storageBytes = Number(row?.storage_bytes ?? 0);
   const classAOps = Number(row?.class_a_ops ?? 0);
   const classBOps = Number(row?.class_b_ops ?? 0);
-  const storageFraction = storageBytes / R2_FREE_TIER.storageBytes;
-  const classAFraction = classAOps / R2_FREE_TIER.classAOps;
-  const classBFraction = classBOps / R2_FREE_TIER.classBOps;
+  const storageFraction = storageBytes / R2_EFFECTIVE_BUDGET.storageBytes;
+  const classAFraction = classAOps / R2_EFFECTIVE_BUDGET.classAOps;
+  const classBFraction = classBOps / R2_EFFECTIVE_BUDGET.classBOps;
   const highestFraction = Math.max(storageFraction, classAFraction, classBFraction);
   return {
     month,
@@ -90,9 +102,9 @@ export function assertR2Capacity(
   reservation: { storageBytes?: number; classAOps?: number; classBOps?: number },
   priority: R2Priority,
 ): void {
-  const storage = (snapshot.storageBytes + Math.max(0, reservation.storageBytes ?? 0)) / R2_FREE_TIER.storageBytes;
-  const classA = (snapshot.classAOps + Math.max(0, reservation.classAOps ?? 0)) / R2_FREE_TIER.classAOps;
-  const classB = (snapshot.classBOps + Math.max(0, reservation.classBOps ?? 0)) / R2_FREE_TIER.classBOps;
+  const storage = (snapshot.storageBytes + Math.max(0, reservation.storageBytes ?? 0)) / R2_EFFECTIVE_BUDGET.storageBytes;
+  const classA = (snapshot.classAOps + Math.max(0, reservation.classAOps ?? 0)) / R2_EFFECTIVE_BUDGET.classAOps;
+  const classB = (snapshot.classBOps + Math.max(0, reservation.classBOps ?? 0)) / R2_EFFECTIVE_BUDGET.classBOps;
   const projected = Math.max(storage, classA, classB);
   const hard = R2_SAFETY.hardLockFraction;
   if (projected >= hard) throw new Error("R2_HARD_LOCK");
@@ -111,22 +123,49 @@ async function reserve(
 ): Promise<R2UsageSnapshot> {
   const snapshot = await getR2Usage(db, now);
   assertR2Capacity(snapshot, change, priority);
-  await db.prepare(
+
+  const fraction = allowedFraction(priority);
+  const storageLimit = Math.max(0, Math.floor(R2_EFFECTIVE_BUDGET.storageBytes * fraction) - 1);
+  const classALimit = Math.max(0, Math.floor(R2_EFFECTIVE_BUDGET.classAOps * fraction) - 1);
+  const classBLimit = Math.max(0, Math.floor(R2_EFFECTIVE_BUDGET.classBOps * fraction) - 1);
+  const storageDelta = Math.max(0, Math.floor(change.storageBytes ?? 0));
+  const classADelta = Math.max(0, Math.floor(change.classAOps ?? 0));
+  const classBDelta = Math.max(0, Math.floor(change.classBOps ?? 0));
+
+  // The conditional UPSERT makes concurrent reservations fail closed. D1
+  // serializes the mutation; a stale pre-read can no longer allow both callers
+  // to cross the same quota boundary.
+  const result = await db.prepare(
     `INSERT INTO r2_usage_monthly(month,storage_bytes,class_a_ops,class_b_ops,updated_at)
      VALUES (?1,?2,?3,?4,?5)
      ON CONFLICT(month) DO UPDATE SET
-       storage_bytes = MAX(0, storage_bytes + excluded.storage_bytes),
-       class_a_ops = MAX(0, class_a_ops + excluded.class_a_ops),
-       class_b_ops = MAX(0, class_b_ops + excluded.class_b_ops),
-       updated_at = excluded.updated_at`
+       storage_bytes = storage_bytes + excluded.storage_bytes,
+       class_a_ops = class_a_ops + excluded.class_a_ops,
+       class_b_ops = class_b_ops + excluded.class_b_ops,
+       updated_at = excluded.updated_at
+     WHERE storage_bytes + excluded.storage_bytes <= ?6
+       AND class_a_ops + excluded.class_a_ops <= ?7
+       AND class_b_ops + excluded.class_b_ops <= ?8`
   ).bind(
     snapshot.month,
-    change.storageBytes ?? 0,
-    change.classAOps ?? 0,
-    change.classBOps ?? 0,
+    storageDelta,
+    classADelta,
+    classBDelta,
     now.toISOString(),
+    storageLimit,
+    classALimit,
+    classBLimit,
   ).run();
-  return getR2Usage(db, now);
+
+  if (result.meta?.changes === 0) {
+    if (priority === "background") throw new Error("R2_CONSERVE_BLOCK");
+    if (priority === "interactive") throw new Error("R2_PREBILL_BLOCK");
+    throw new Error("R2_HARD_LOCK");
+  }
+
+  const updated = await getR2Usage(db, now);
+  assertR2Capacity(updated, {}, priority);
+  return updated;
 }
 
 async function trackedObjectSize(db: D1DatabaseLike, key: string, now = new Date()): Promise<number> {
@@ -216,7 +255,8 @@ export async function deleteR2Object(
   now = new Date(),
 ): Promise<void> {
   const previousSize = await trackedObjectSize(db, key, now);
-  await reserve(db, { classAOps: 1 }, priority, now);
+  // DeleteObject is free in R2 Standard; it should not consume the paid-risk
+  // Class A reserve. Storage accounting is still reduced after deletion.
   await bucket.delete(key);
   await db.prepare("DELETE FROM r2_objects WHERE object_key=?1").bind(key).run();
   if (previousSize > 0) {
