@@ -678,11 +678,13 @@ export async function rerankWithCloudflare(
       top_k: Math.min(contexts.length, Math.max(1, topK ?? contexts.length)),
     },
     { gateway: { id: "default", collectLog: false }, rejectIfBusy: true },
-  ) as {
-    response?: Array<{ id?: number; index?: number; score?: number }>;
-    result?: Array<{ id?: number; index?: number; score?: number }>;
-  };
-  const items = response.response ?? response.result ?? [];
+  ) as
+    | Array<{ id?: number; index?: number; score?: number }>
+    | {
+        response?: Array<{ id?: number; index?: number; score?: number }>;
+        result?: Array<{ id?: number; index?: number; score?: number }>;
+      };
+  const items = Array.isArray(response) ? response : (response.response ?? response.result ?? []);
   const parsed = items.map((item, position) => ({
     index: Number(item.index ?? item.id ?? position),
     score: Number(item.score ?? 0),
