@@ -18,6 +18,7 @@ export type TaskDefinition = {
 };
 
 export const tasks: TaskDefinition[] = [
+  { id: "security.prompt_injection.detect", version: 1, app: "nestai", modality: "text", defaultSensitivity: "P2_PERSONAL", allowedProviders: ["groq"], blockedProviders: ["cloudflare","gemini","mistral","nvidia-nim","local-webgpu"], streaming: false, capability: "security:scan", maxOutputTokens: 16, timeoutMs: 5_000, priority: "critical", cache: { mode: "disabled", ttlSeconds: 0 } },
   { id: "hub.operational.summary", version: 1, app: "millionsnest", modality: "text", defaultSensitivity: "P1_INTERNAL", allowedProviders: ["groq","cloudflare"], blockedProviders: ["gemini","mistral"], streaming: false, capability: "ai:run", maxOutputTokens: 1024, timeoutMs: 15_000, priority: "background", cache: { mode: "disabled", ttlSeconds: 0 } },
   { id: "hub.incident.explain", version: 1, app: "millionsnest", modality: "text", defaultSensitivity: "P1_INTERNAL", allowedProviders: ["groq","cloudflare"], blockedProviders: ["gemini","mistral"], streaming: true, capability: "ai:run", maxOutputTokens: 1200, timeoutMs: 15_000, priority: "interactive", cache: { mode: "disabled", ttlSeconds: 0 }, rag: true },
 

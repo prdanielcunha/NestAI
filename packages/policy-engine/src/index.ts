@@ -4,7 +4,8 @@ export type ProviderPolicy = { id:string; freeEligible:boolean; paidRequired:boo
 const rank:Sensitivity[]=["P0_PUBLIC","P1_INTERNAL","P2_PERSONAL","P3_SENSITIVE","P4_RESTRICTED"];
 
 export function providerAllowed(args:{sensitivity:Sensitivity; provider:ProviderPolicy; billingMode:BillingMode}) {
-  if (args.sensitivity === "P4_RESTRICTED") return false;
+  // P4 may only be processed by an explicitly local/on-device provider.
+  if (args.sensitivity === "P4_RESTRICTED" && args.provider.id !== "local-webgpu") return false;
   if (args.billingMode === "FREE_ONLY" && (!args.provider.freeEligible || args.provider.paidRequired)) return false;
   return rank.indexOf(args.sensitivity) <= rank.indexOf(args.provider.maxSensitivity);
 }
@@ -14,4 +15,23 @@ export function assertFreeOnlyInvariant(env:Record<string,string|undefined>) {
   if (env.ALLOW_PAID_FALLBACK !== "false") throw new Error("BOOT_REFUSED: paid fallback must be false");
   if (env.AUTO_UPGRADE_PROVIDER !== "false") throw new Error("BOOT_REFUSED: auto upgrade must be false");
   if (env.AI_PAID_ENABLED !== "false") throw new Error("BOOT_REFUSED: paid providers must be disabled");
+}
+
+
+export type PromptGuardPolicyInput = {
+  verdict: "benign" | "malicious" | "uncertain";
+  source: "user" | "retrieved";
+  criticalAction: boolean;
+};
+
+export type PromptGuardPolicyAction = "ALLOW" | "QUARANTINE" | "REVIEW";
+
+export function promptGuardPolicy(input: PromptGuardPolicyInput): PromptGuardPolicyAction {
+  if (input.verdict === "benign") return "ALLOW";
+  if (input.source === "retrieved") return "QUARANTINE";
+  // Classifier outages must not remove ordinary product functionality.
+  // Critical operations still require review, while noncritical input falls
+  // back to deterministic policy checks when the classifier is uncertain.
+  if (input.verdict === "uncertain" && !input.criticalAction) return "ALLOW";
+  return "REVIEW";
 }

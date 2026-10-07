@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { routeModel } from "../../packages/router/src/index.js";
+import { routeCandidates, routeModel } from "../../packages/router/src/index.js";
 
 describe("deterministic router", () => {
   it("prefers the smaller Groq production model for eligible text", () => {
@@ -40,5 +40,36 @@ describe("deterministic router", () => {
       allowedProviders: ["groq", "cloudflare"],
       blockedProviders: [],
     })).toThrow("ROUTER_NO_ELIGIBLE_MODEL");
+  });
+
+
+  it("never routes candidate-only Qwen or NVIDIA into normal customer traffic", () => {
+    const candidates = routeCandidates({
+      sensitivity: "P1_INTERNAL",
+      billingMode: "FREE_ONLY",
+      modality: "text",
+      allowedProviders: ["groq","cloudflare","nvidia-nim"],
+      blockedProviders: [],
+      availableProviders: ["groq","cloudflare","nvidia-nim"],
+      allowPreviewModels: true,
+      executionMode: "customer",
+    });
+    expect(candidates.some((item) => item.modelId === "groq:qwen3.8-27b")).toBe(false);
+    expect(candidates.some((item) => item.provider === "nvidia-nim")).toBe(false);
+  });
+
+  it("allows candidate-only models exclusively in eval mode", () => {
+    const candidates = routeCandidates({
+      sensitivity: "P1_INTERNAL",
+      billingMode: "FREE_ONLY",
+      modality: "text",
+      allowedProviders: ["groq","nvidia-nim"],
+      blockedProviders: [],
+      availableProviders: ["groq","nvidia-nim"],
+      allowPreviewModels: true,
+      executionMode: "eval",
+    });
+    expect(candidates.some((item) => item.modelId === "groq:qwen3.8-27b")).toBe(true);
+    expect(candidates.some((item) => item.provider === "nvidia-nim")).toBe(true);
   });
 });

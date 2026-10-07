@@ -33,9 +33,9 @@ describe("provider privacy and free-tier policy", () => {
     })).toBe(false);
   });
 
-  it("never allows P4 on any external model provider", () => {
+  it("never allows P4 on an external provider and allows it only on the local boundary", () => {
     for (const provider of Object.values(providers)) {
-      expect(providerAllowed({
+      const allowed = providerAllowed({
         sensitivity: "P4_RESTRICTED",
         billingMode: "FREE_ONLY",
         provider: {
@@ -44,7 +44,8 @@ describe("provider privacy and free-tier policy", () => {
           paidRequired: !provider.freeEligible,
           maxSensitivity: provider.maxSensitivity,
         },
-      })).toBe(false);
+      });
+      expect(allowed).toBe(provider.id === "local-webgpu");
     }
   });
 });

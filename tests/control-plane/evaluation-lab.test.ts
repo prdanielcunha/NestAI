@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregateEval, promote, promotionGate, runEvalSuite, type EvalCaseResult } from "../../packages/evaluation-lab/src/index.js";
+import { aggregateEval, promote, promotionGate, runEvalSuite, assertEvalTargetAllowed, evalTargets, type EvalCaseResult } from "../../packages/evaluation-lab/src/index.js";
 
 describe("Evaluation Lab",()=>{
   it("runs only sanitized golden cases and produces promotion evidence",async()=>{
@@ -54,5 +54,35 @@ describe("Evaluation Lab",()=>{
     expect(promote("shadow",true)).toBe("canary");
     expect(promote("canary",true)).toBe("production");
     expect(()=>promote("candidate",false)).toThrow("EVAL_PROMOTION_GATE_FAILED");
+  });
+});
+
+
+describe("Evaluation Lab candidate boundaries", () => {
+  it("registers Qwen, BGE-M3, reranker and NVIDIA as candidate-only targets", () => {
+    for (const id of [
+      "groq:qwen3.8-27b",
+      "cloudflare:bge-m3",
+      "cloudflare:bge-reranker-base",
+      "nvidia-nim:gpt-oss-20b-eval",
+    ]) {
+      expect(evalTargets[id]?.stage).toBe("candidate");
+      expect(evalTargets[id]?.customerTrafficAllowed).toBe(false);
+      expect(evalTargets[id]?.productionTrafficAllowed).toBe(false);
+    }
+  });
+
+  it("rejects unsanitized or sensitive candidate evaluation payloads", () => {
+    expect(() => assertEvalTargetAllowed({
+      targetId: "nvidia-nim:gpt-oss-20b-eval",
+      sanitized: false,
+      sensitivity: "P0_PUBLIC",
+    })).toThrow("EVAL_TARGET_REQUIRES_SANITIZED_INPUT");
+
+    expect(() => assertEvalTargetAllowed({
+      targetId: "nvidia-nim:gpt-oss-20b-eval",
+      sanitized: true,
+      sensitivity: "P2_PERSONAL",
+    })).toThrow("EVAL_TARGET_SENSITIVITY_DENIED");
   });
 });

@@ -157,3 +157,43 @@ export async function persistKnowledgeSource(
     "ON CONFLICT(index_id) DO UPDATE SET version=version+1,status=excluded.status,chunks=excluded.chunks,metadata_json=excluded.metadata_json,updated_at=excluded.updated_at"
   ).bind(scopedId + ":index",scopedId,args.status,args.chunks,JSON.stringify({ vectorDimensions: 768 }),now.toISOString()).run();
 }
+
+
+export type RetrievedEvidence = {
+  text: string;
+  evidence: EvidenceRef;
+  sensitivity: Sensitivity;
+};
+
+export function applyRerankResults(
+  candidates: RetrievedEvidence[],
+  results: Array<{ index: number; score: number }>,
+  limit: number,
+): RetrievedEvidence[] {
+  const safeLimit = Math.min(candidates.length, Math.max(1, limit));
+  const seen = new Set<number>();
+  const ranked: RetrievedEvidence[] = [];
+
+  for (const item of [...results].sort((a, b) => b.score - a.score)) {
+    if (!Number.isInteger(item.index) || item.index < 0 || item.index >= candidates.length || seen.has(item.index)) continue;
+    seen.add(item.index);
+    const candidate = candidates[item.index]!;
+    ranked.push({
+      ...candidate,
+      evidence: {
+        ...candidate.evidence,
+        score: item.score,
+      },
+    });
+    if (ranked.length >= safeLimit) break;
+  }
+
+  if (ranked.length < safeLimit) {
+    for (let index = 0; index < candidates.length && ranked.length < safeLimit; index += 1) {
+      if (seen.has(index)) continue;
+      ranked.push(candidates[index]!);
+    }
+  }
+
+  return ranked;
+}

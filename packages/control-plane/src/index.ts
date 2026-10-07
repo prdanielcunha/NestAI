@@ -308,3 +308,48 @@ export async function syncStaticControlPlane(
     prompts:Object.keys(prompts).length,
   };
 }
+
+
+export async function recordEvaluationProbe(
+  db: D1DatabaseLike,
+  args: {
+    targetId: string;
+    provider: string;
+    modelId: string;
+    kind: string;
+    latencyMs: number;
+    passed: boolean;
+    report: Record<string, unknown>;
+  },
+  now = new Date(),
+): Promise<string> {
+  const suiteId = "candidate:" + args.targetId;
+  const runId = crypto.randomUUID();
+  await db.prepare(
+    `INSERT INTO cp_eval_suites(suite_id,task_id,name,status,updated_at)
+     VALUES (?1,'__evaluation__',?2,'active',?3)
+     ON CONFLICT(suite_id) DO UPDATE SET status='active',updated_at=excluded.updated_at`
+  ).bind(suiteId, "Candidate benchmark — " + args.targetId, now.toISOString()).run();
+
+  await db.prepare(
+    `INSERT INTO cp_eval_runs(run_id,suite_id,target_json,score,passed,report_json,created_at)
+     VALUES (?1,?2,?3,?4,?5,?6,?7)`
+  ).bind(
+    runId,
+    suiteId,
+    JSON.stringify({
+      targetId: args.targetId,
+      provider: args.provider,
+      modelId: args.modelId,
+      kind: args.kind,
+    }),
+    args.passed ? 1 : 0,
+    args.passed ? 1 : 0,
+    JSON.stringify({
+      latencyMs: args.latencyMs,
+      ...args.report,
+    }),
+    now.toISOString(),
+  ).run();
+  return runId;
+}

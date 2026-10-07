@@ -1,7 +1,8 @@
 export type ModelStatus = "production" | "preview" | "blocked";
+export type PromotionStage = "candidate" | "benchmark" | "regression" | "shadow" | "canary" | "production";
 
 export type ModelDescriptor = {
-  provider: "groq" | "cloudflare" | "gemini" | "mistral";
+  provider: "groq" | "cloudflare" | "gemini" | "mistral" | "nvidia-nim" | "local-webgpu";
   providerModelId: string;
   status: ModelStatus;
   freeEligible: boolean;
@@ -15,6 +16,13 @@ export type ModelDescriptor = {
   embedding?: boolean;
   embeddingDimensions?: number;
   imageOut?: boolean;
+  safetyClassifier?: boolean;
+  reranker?: boolean;
+  localCapability?: "language_detection" | "classification" | "embedding" | "normalization" | "pii_predetection";
+  promotionStage?: PromotionStage;
+  productionTrafficAllowed?: boolean;
+  customerTrafficAllowed?: boolean;
+  evalOnly?: boolean;
   license?: string;
   commercialUse?: "allowed" | "review_required";
   attributionRequired?: boolean;
@@ -45,6 +53,36 @@ export const models = {
     tools: true,
     reasoning: true,
     reviewedAt: "2026-10-06",
+  },
+  "groq:qwen3.8-27b": {
+    provider: "groq",
+    providerModelId: "qwen/qwen3.8-27b",
+    status: "preview",
+    promotionStage: "candidate",
+    freeEligible: true,
+    paidRequired: false,
+    context: 131042,
+    structuredOutput: true,
+    tools: true,
+    reasoning: true,
+    vision: true,
+    productionTrafficAllowed: false,
+    customerTrafficAllowed: false,
+    reviewedAt: "2026-10-07",
+  },
+  "groq:prompt-guard-2-86m": {
+    provider: "groq",
+    providerModelId: "meta-llama/llama-prompt-guard-2-86m",
+    status: "preview",
+    promotionStage: "candidate",
+    freeEligible: true,
+    paidRequired: false,
+    context: 512,
+    structuredOutput: true,
+    safetyClassifier: true,
+    productionTrafficAllowed: true,
+    customerTrafficAllowed: false,
+    reviewedAt: "2026-10-07",
   },
   "groq:whisper-large-v3-turbo": {
     provider: "groq",
@@ -113,6 +151,35 @@ export const models = {
     attributionRequired: false,
     reviewedAt: "2026-10-06",
   },
+  "cloudflare:bge-m3": {
+    provider: "cloudflare",
+    providerModelId: "@cf/baai/bge-m3",
+    status: "preview",
+    promotionStage: "candidate",
+    freeEligible: true,
+    paidRequired: false,
+    embedding: true,
+    embeddingDimensions: 1024,
+    productionTrafficAllowed: false,
+    customerTrafficAllowed: false,
+    commercialUse: "review_required",
+    attributionRequired: false,
+    reviewedAt: "2026-10-07",
+  },
+  "cloudflare:bge-reranker-base": {
+    provider: "cloudflare",
+    providerModelId: "@cf/baai/bge-reranker-base",
+    status: "preview",
+    promotionStage: "candidate",
+    freeEligible: true,
+    paidRequired: false,
+    reranker: true,
+    productionTrafficAllowed: true,
+    customerTrafficAllowed: true,
+    commercialUse: "review_required",
+    attributionRequired: false,
+    reviewedAt: "2026-10-07",
+  },
   "cloudflare:flux-1-schnell": {
     provider: "cloudflare",
     providerModelId: "@cf/black-forest-labs/flux-1-schnell",
@@ -168,6 +235,38 @@ export const models = {
     commercialUse: "allowed",
     attributionRequired: false,
     reviewedAt: "2026-10-06",
+  },
+  "nvidia-nim:gpt-oss-20b-eval": {
+    provider: "nvidia-nim",
+    providerModelId: "openai/gpt-oss-20b",
+    status: "preview",
+    promotionStage: "candidate",
+    freeEligible: true,
+    paidRequired: false,
+    context: 131072,
+    structuredOutput: true,
+    tools: true,
+    reasoning: true,
+    productionTrafficAllowed: false,
+    customerTrafficAllowed: false,
+    evalOnly: true,
+    commercialUse: "allowed",
+    attributionRequired: false,
+    reviewedAt: "2026-10-07",
+  },
+  "local-webgpu:multilingual-classifier": {
+    provider: "local-webgpu",
+    providerModelId: "transformers-js:adapter-managed",
+    status: "preview",
+    promotionStage: "candidate",
+    freeEligible: true,
+    paidRequired: false,
+    localCapability: "classification",
+    productionTrafficAllowed: true,
+    customerTrafficAllowed: true,
+    commercialUse: "review_required",
+    attributionRequired: false,
+    reviewedAt: "2026-10-07",
   },
   "cloudflare:kimi-k2.7-code": {
     provider: "cloudflare",

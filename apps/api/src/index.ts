@@ -1,8 +1,10 @@
 import { TaskRequest, AudioInput, VisionInput, EmbeddingInput, ImageInput, RagQueryRequest, KnowledgeIngestRequest } from "../../../packages/contracts/src/index.js";
 import { verifyNestAiToken, requireCapability, readNestAiTokenHeader, type NestAiClaims } from "../../../packages/auth/src/index.js";
 import { verifyFirebaseAppCheckToken } from "../../../packages/app-check/src/index.js";
-import { classifyPrivacy } from "../../../packages/privacy-firewall/src/index.js";
+import { classifyPrivacy, redactSensitiveText } from "../../../packages/privacy-firewall/src/index.js";
+import { scanPromptInjection, type PromptGuardDecision } from "../../../packages/prompt-guard/src/index.js";
 import { getTask, type TaskDefinition } from "../../../packages/task-registry/src/index.js";
+import { promptGuardPolicy } from "../../../packages/policy-engine/src/index.js";
 import { routeCandidates, type RouteDecision } from "../../../packages/router/src/index.js";
 import {
   generateWithCloudflare,
@@ -19,6 +21,9 @@ import {
   extractDocumentsTextWithCloudflare,
   embedWithCloudflare,
   generateImageWithCloudflare,
+  classifyPromptGuardWithGroq,
+  rerankWithCloudflare,
+  generateWithNvidiaEval,
   probeGroq,
   probeGemini,
   probeMistral,
@@ -27,7 +32,7 @@ import {
   type GenerateResult,
   type WorkersAiBinding,
 } from "../../../packages/providers/src/index.js";
-import { assertProviderFreeQuota, assertWithinFreeBudget } from "../../../packages/cost-guard/src/index.js";
+import { assertProviderFreeQuota, assertModelFreeQuota, assertWithinFreeBudget } from "../../../packages/cost-guard/src/index.js";
 import { safeTrace, persistTrace, recordProviderHealthSample, evaluateSloAlerts } from "../../../packages/observability/src/index.js";
 import { incrementUsage, getDimensionalUsage, incrementDimensionalUsage, recordRuntimeEvent, type D1DatabaseLike } from "../../../packages/usage-ledger/src/index.js";
 import { buildTaskPrompt } from "../../../packages/prompt-registry/src/index.js";
@@ -36,11 +41,12 @@ import { CircuitBreaker, executeWithSafeFallback } from "../../../packages/resil
 import type { Locale } from "../../../packages/i18n/src/index.js";
 import { cacheGet, cachePut, type KvNamespaceLike } from "../../../packages/cache/src/index.js";
 import { createJob, enqueueJob, getJobForScope, getJobResult, nextAttempt, putJobResult, retryDelaySeconds, updateJobStatus, type JobEnvelope, type QueueLike } from "../../../packages/jobs/src/index.js";
-import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit, controlPlaneRoutes, controlPlanePrompts, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota, syncStaticControlPlane } from "../../../packages/control-plane/src/index.js";
+import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit, controlPlaneRoutes, controlPlanePrompts, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota, syncStaticControlPlane, recordEvaluationProbe } from "../../../packages/control-plane/src/index.js";
 import { validateAppManifest, assertManifestTaskOwnership, persistAppManifest } from "../../../packages/app-manifest/src/index.js";
 import { verifyGitHubWorkloadToken } from "../../../packages/workload-auth/src/index.js";
-import { queryKnowledge, upsertKnowledge, persistKnowledgeSource, ragOrganizationHash, ragScopedSourceId, type VectorizeLike } from "../../../packages/rag/src/index.js";
+import { queryKnowledge, upsertKnowledge, persistKnowledgeSource, ragOrganizationHash, ragScopedSourceId, applyRerankResults, type VectorizeLike, type RetrievedEvidence } from "../../../packages/rag/src/index.js";
 import { getR2Usage, putR2Object, r2Utf8Size, reconcileR2Inventory, type R2BucketLike } from "../../../packages/r2-storage/src/index.js";
+import { assertEvalTargetAllowed } from "../../../packages/evaluation-lab/src/index.js";
 
 type RateLimiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
 
@@ -56,6 +62,7 @@ export type Env = {
   GROQ_API_KEY?: string;
   GEMINI_API_KEY?: string;
   MISTRAL_API_KEY?: string;
+  NVIDIA_API_KEY?: string;
   HUB_JWKS_URL: string;
   HUB_TOKEN_ISSUER: string;
   NESTAI_TOKEN_AUDIENCE: string;
@@ -80,6 +87,11 @@ export type Env = {
   AI_CACHE_ENABLED?: "true" | "false";
   AI_VECTORIZE_ENABLED?: "true" | "false";
   AI_R2_WRITES_ENABLED?: "true" | "false";
+  AI_PROMPT_GUARD_ENABLED?: "true" | "false";
+  AI_RAG_RERANK_ENABLED?: "true" | "false";
+  AI_BGE_M3_ENABLED?: "true" | "false";
+  AI_LOCAL_WEBGPU_ENABLED?: "true" | "false";
+  AI_NVIDIA_EVAL_ENABLED?: "true" | "false";
 };
 
 function json(body: unknown, status = 200): Response {
@@ -94,7 +106,7 @@ function statusFor(code: string): number {
   if (code.startsWith("AUTH_") || code.startsWith("APP_CHECK_")) return 401;
   if (code === "TASK_NOT_REGISTERED") return 404;
   if (code.startsWith("COST_GUARD_") || code.startsWith("R2_") || code === "RATE_LIMITED") return 429;
-  if (code.startsWith("PRIVACY_") || code.startsWith("OUTPUT_SCHEMA_") || code.startsWith("EVIDENCE_") || code === "ROUTER_NO_ELIGIBLE_MODEL") return 422;
+  if (code.startsWith("PRIVACY_") || code.startsWith("PROMPT_GUARD_") || code.startsWith("OUTPUT_SCHEMA_") || code.startsWith("EVIDENCE_") || code === "ROUTER_NO_ELIGIBLE_MODEL") return 422;
   if (code === "AI_DISABLED" || code === "APP_AI_DISABLED") return 503;
   if (code === "PROVIDER_TIMEOUT") return 504;
   return 500;
@@ -468,6 +480,65 @@ async function recordProviderAttempt(
   ]);
 }
 
+async function runPromptGuard(
+  env: Env,
+  text: string,
+  options: {
+    untrustedExternalContent: boolean;
+    appId: string;
+    organizationId: string;
+    sensitivity: ReturnType<typeof classifyPrivacy>["sensitivity"];
+  },
+): Promise<PromptGuardDecision> {
+  if (
+    env.AI_PROMPT_GUARD_ENABLED !== "true" ||
+    options.sensitivity === "P3_SENSITIVE" ||
+    options.sensitivity === "P4_RESTRICTED"
+  ) {
+    return scanPromptInjection({
+      text,
+      classify: async () => "LABEL_0",
+      untrustedExternalContent: options.untrustedExternalContent,
+    });
+  }
+
+  const minimized = redactSensitiveText(text, "P1_INTERNAL");
+  return scanPromptInjection({
+    text: minimized,
+    untrustedExternalContent: options.untrustedExternalContent,
+    classify: async (segment) => {
+      const usage = await getDimensionalUsage(env.DB, {
+        scopeType: "provider",
+        scopeId: "groq",
+        provider: "groq",
+        task: "security.prompt_injection.detect",
+      });
+      assertModelFreeQuota("groq:prompt-guard-2-86m", usage.provider_calls, "critical");
+      const result = await withTimeout(
+        (signal) => classifyPromptGuardWithGroq(env.GROQ_API_KEY ?? "", segment, signal),
+        5_000,
+      );
+      await incrementDimensionalUsage(env.DB, [
+        { scopeType: "provider", scopeId: "groq", provider: "groq", task: "security.prompt_injection.detect" },
+        { scopeType: "app", scopeId: options.appId, provider: "groq", task: "security.prompt_injection.detect" },
+        { scopeType: "organization", scopeId: options.organizationId, provider: "groq", task: "security.prompt_injection.detect" },
+      ]);
+      return result.label;
+    },
+  });
+}
+
+function assertPromptGuardPolicy(decision: PromptGuardDecision, source: "user" | "retrieved"): void {
+  const action = promptGuardPolicy({
+    verdict: decision.verdict,
+    source,
+    criticalAction: false,
+  });
+  if (action === "ALLOW") return;
+  if (action === "QUARANTINE") throw new Error("RAG_UNTRUSTED_CONTENT_QUARANTINED");
+  throw new Error(decision.verdict === "malicious" ? "PROMPT_GUARD_BLOCKED" : "PROMPT_GUARD_REVIEW_REQUIRED");
+}
+
 function assertGuestSensitivity(claims: NestAiClaims, sensitivity: ReturnType<typeof classifyPrivacy>["sensitivity"]): void {
   if (claims.tokenType === "guest" && sensitivity !== "P0_PUBLIC" && sensitivity !== "P1_INTERNAL") {
     throw new Error("AUTH_GUEST_SENSITIVITY_DENIED");
@@ -509,6 +580,25 @@ async function prepareTaskExecution(
   if (!privacy.externalAllowed) {
     await recordRuntimeEvent(env.DB, { id: crypto.randomUUID(), eventType: "privacy_rejected", appId: task.app, task: task.id });
     throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
+  }
+
+  if (task.modality === "text") {
+    const serializedInput = typeof parsed.input === "string" ? parsed.input : JSON.stringify(parsed.input);
+    const guard = await runPromptGuard(env, serializedInput, {
+      untrustedExternalContent: false,
+      appId: task.app,
+      organizationId,
+      sensitivity: privacy.sensitivity,
+    });
+    if (guard.verdict !== "benign") {
+      await recordRuntimeEvent(env.DB, {
+        id: crypto.randomUUID(),
+        eventType: "prompt_guard_flagged",
+        appId: task.app,
+        task: task.id,
+      });
+    }
+    assertPromptGuardPolicy(guard, "user");
   }
 
   return {
@@ -907,6 +997,96 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     }
   }
 
+  if (request.method === "POST" && url.pathname === "/v1/admin/evals/probe") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    const started = Date.now();
+    try {
+      await authenticateAdminRequest(request, env);
+      const body = await request.json() as {
+        targetId?: string;
+        sanitized?: boolean;
+        sensitivity?: "P0_PUBLIC" | "P1_INTERNAL" | "P2_PERSONAL" | "P3_SENSITIVE" | "P4_RESTRICTED";
+        prompt?: string;
+        texts?: string[];
+        query?: string;
+        contexts?: string[];
+      };
+      const target = assertEvalTargetAllowed({
+        targetId: String(body.targetId ?? ""),
+        sanitized: body.sanitized === true,
+        sensitivity: body.sensitivity ?? "P0_PUBLIC",
+        customerTraffic: false,
+      });
+      if (target.provider === "nvidia-nim" && env.AI_NVIDIA_EVAL_ENABLED !== "true") {
+        throw new Error("EVAL_NVIDIA_DISABLED");
+      }
+      if (target.id === "cloudflare:bge-m3" && env.AI_BGE_M3_ENABLED !== "true") {
+        throw new Error("EVAL_BGE_M3_DISABLED");
+      }
+
+      let result: unknown;
+      if (target.kind === "text_model") {
+        if (typeof body.prompt !== "string" || !body.prompt.trim()) throw new Error("EVAL_PROMPT_REQUIRED");
+        const route: RouteDecision = {
+          modelId: target.id as RouteDecision["modelId"],
+          provider: target.provider,
+          providerModelId: target.modelId,
+          reason: ["evaluation_lab_only", "sanitized_input_required"],
+        };
+        const requestPayload: GenerateRequest = {
+          route,
+          messages: [{ role: "user", content: body.prompt }],
+          maxTokens: 512,
+        };
+        result = target.provider === "nvidia-nim"
+          ? await generateWithNvidiaEval(env.NVIDIA_API_KEY ?? "", requestPayload)
+          : await generateWithGroq(env.GROQ_API_KEY ?? "", requestPayload);
+      } else if (target.kind === "embedding_model") {
+        if (target.provider !== "cloudflare") throw new Error("EVAL_TARGET_PROVIDER_INVALID");
+        const texts = Array.isArray(body.texts) ? body.texts.filter((item): item is string => typeof item === "string").slice(0, 16) : [];
+        if (texts.length === 0) throw new Error("EVAL_TEXTS_REQUIRED");
+        result = {
+          vectors: await embedWithCloudflare(env.AI, target.modelId, texts),
+        };
+      } else {
+        if (target.provider !== "cloudflare") throw new Error("EVAL_TARGET_PROVIDER_INVALID");
+        if (typeof body.query !== "string" || !body.query.trim()) throw new Error("EVAL_QUERY_REQUIRED");
+        const contexts = Array.isArray(body.contexts)
+          ? body.contexts.filter((item): item is string => typeof item === "string").slice(0, 32)
+          : [];
+        if (contexts.length === 0) throw new Error("EVAL_CONTEXTS_REQUIRED");
+        result = await rerankWithCloudflare(env.AI, body.query, contexts, Math.min(10, contexts.length));
+      }
+
+      const latencyMs = Date.now() - started;
+      const runId = await recordEvaluationProbe(env.DB, {
+        targetId: target.id,
+        provider: target.provider,
+        modelId: target.modelId,
+        kind: target.kind,
+        latencyMs,
+        passed: true,
+        report: {
+          sanitized: true,
+          sensitivity: body.sensitivity ?? "P0_PUBLIC",
+          outputStored: false,
+        },
+      });
+
+      return json({
+        requestId,
+        runId,
+        target: target.id,
+        stage: target.stage,
+        latencyMs,
+        result,
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      return json({ requestId, error: code }, code.startsWith("EVAL_") ? 422 : statusFor(code));
+    }
+  }
+
   if (request.method === "POST" && url.pathname === "/v1/admin/knowledge/ingest") {
     const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
     try {
@@ -1044,15 +1224,83 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       const [queryVector] = await embedWithCloudflare(env.AI, "@cf/google/embeddinggemma-300m", input.query);
       if (!queryVector) throw new Error("RAG_QUERY_EMBEDDING_EMPTY");
 
-      const evidence = await queryKnowledge({
+      const requestedTopK = Math.min(12, Math.max(1, input.topK ?? 6));
+      const initialTopK = Math.min(20, Math.max(requestedTopK, requestedTopK * 3));
+      const retrieved = await queryKnowledge({
         vectorize: env.VECTORIZE,
         appId: task.app,
         organizationId,
         maxSensitivity: task.defaultSensitivity,
         locale: input.context.locale,
         queryVector,
-        ...(input.topK !== undefined ? { topK: input.topK } : {}),
+        topK: initialTopK,
       });
+
+      const queryGuard = await runPromptGuard(env, input.query, {
+        untrustedExternalContent: false,
+        appId: task.app,
+        organizationId,
+        sensitivity: privacy.sensitivity,
+      });
+      assertPromptGuardPolicy(queryGuard, "user");
+
+      const guardedEvidence: RetrievedEvidence[] = [];
+      for (const item of retrieved) {
+        const evidenceGuard = await runPromptGuard(env, item.text, {
+          untrustedExternalContent: true,
+          appId: task.app,
+          organizationId,
+          sensitivity: item.sensitivity,
+        });
+        if (promptGuardPolicy({
+          verdict: evidenceGuard.verdict,
+          source: "retrieved",
+          criticalAction: false,
+        }) === "ALLOW") {
+          guardedEvidence.push(item);
+        } else {
+          await recordRuntimeEvent(env.DB, {
+            id: crypto.randomUUID(),
+            eventType: "rag_prompt_guard_quarantine",
+            appId: task.app,
+            task: task.id,
+          });
+        }
+      }
+
+      let evidence = guardedEvidence.slice(0, requestedTopK);
+      if (env.AI_RAG_RERANK_ENABLED === "true" && guardedEvidence.length > 1) {
+        try {
+          const reranked = await withTimeout(
+            () => rerankWithCloudflare(
+              env.AI,
+              input.query,
+              guardedEvidence.map((item) => item.text),
+              requestedTopK,
+            ),
+            5_000,
+          );
+          evidence = applyRerankResults(guardedEvidence, reranked, requestedTopK);
+          await recordRuntimeEvent(env.DB, {
+            id: crypto.randomUUID(),
+            eventType: "rag_rerank_used",
+            appId: task.app,
+            provider: "cloudflare",
+            task: task.id,
+          });
+        } catch {
+          evidence = guardedEvidence.slice(0, requestedTopK);
+          await recordRuntimeEvent(env.DB, {
+            id: crypto.randomUUID(),
+            eventType: "rag_rerank_fallback",
+            appId: task.app,
+            provider: "cloudflare",
+            task: task.id,
+          });
+        }
+      }
+
+      if (evidence.length === 0) throw new Error("RAG_EVIDENCE_UNAVAILABLE");
 
       const parsed = TaskRequest.parse({
         task: task.id,

@@ -1,4 +1,7 @@
-export interface D1Result<T = unknown> { results?: T[] }
+export interface D1Result<T = unknown> {
+  results?: T[];
+  meta?: { changes?: number; changed_db?: boolean };
+}
 export interface D1Statement {
   bind(...values: unknown[]): D1Statement;
   first<T = unknown>(): Promise<T | null>;

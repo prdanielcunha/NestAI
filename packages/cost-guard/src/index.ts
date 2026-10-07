@@ -17,6 +17,8 @@ export type FreeQuotaPolicy = {
   hardDailyRequests: number;
   sharedFraction: number;
   reserveFraction: number;
+  reviewedAt?: string;
+  sourceUrl?: string;
 };
 
 export type QuotaDecision = {
@@ -30,9 +32,16 @@ export type QuotaDecision = {
 };
 
 export const providerFreeQuota: Record<string, FreeQuotaPolicy> = {
-  groq: { hardDailyRequests: 1000, sharedFraction: 0.8, reserveFraction: 0.2 },
-  cloudflare: { hardDailyRequests: 900, sharedFraction: 0.8, reserveFraction: 0.2 },
-  gemini: { hardDailyRequests: 500, sharedFraction: 0.8, reserveFraction: 0.2 },
+  groq: { hardDailyRequests: 1000, sharedFraction: 0.8, reserveFraction: 0.2, reviewedAt: "2026-10-07", sourceUrl: "https://console.groq.com/docs/rate-limits" },
+  cloudflare: { hardDailyRequests: 900, sharedFraction: 0.8, reserveFraction: 0.2, reviewedAt: "2026-10-07", sourceUrl: "https://developers.cloudflare.com/workers-ai/platform/pricing/" },
+  gemini: { hardDailyRequests: 500, sharedFraction: 0.8, reserveFraction: 0.2, reviewedAt: "2026-10-07", sourceUrl: "https://ai.google.dev/gemini-api/docs/rate-limits" },
+};
+
+export const modelFreeQuota: Record<string, FreeQuotaPolicy> = {
+  "groq:gpt-oss-120b": { hardDailyRequests: 1000, sharedFraction: 0.8, reserveFraction: 0.2, reviewedAt: "2026-10-07", sourceUrl: "https://console.groq.com/docs/rate-limits" },
+  "groq:gpt-oss-20b": { hardDailyRequests: 1000, sharedFraction: 0.8, reserveFraction: 0.2, reviewedAt: "2026-10-07", sourceUrl: "https://console.groq.com/docs/rate-limits" },
+  "groq:qwen3.8-27b": { hardDailyRequests: 1000, sharedFraction: 0.8, reserveFraction: 0.2, reviewedAt: "2026-10-07", sourceUrl: "https://console.groq.com/docs/rate-limits" },
+  "groq:prompt-guard-2-86m": { hardDailyRequests: 14400, sharedFraction: 0.8, reserveFraction: 0.2, reviewedAt: "2026-10-07", sourceUrl: "https://console.groq.com/docs/rate-limits" },
 };
 
 export function quotaHealth(remainingFraction: number): QuotaHealth {
@@ -75,6 +84,16 @@ export function assertProviderFreeQuota(
 ): QuotaDecision {
   const policy = providerFreeQuota[provider];
   if (!policy) throw new Error("COST_GUARD_PROVIDER_NOT_FREE");
+  return evaluateQuota(used, policy, priority);
+}
+
+export function assertModelFreeQuota(
+  modelId: string,
+  used: number,
+  priority: WorkPriority = "interactive",
+): QuotaDecision {
+  const policy = modelFreeQuota[modelId];
+  if (!policy) throw new Error("COST_GUARD_MODEL_NOT_REVIEWED");
   return evaluateQuota(used, policy, priority);
 }
 

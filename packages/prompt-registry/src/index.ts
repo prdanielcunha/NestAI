@@ -72,9 +72,9 @@ export const prompts: Record<string, PromptDefinition> = {
     version: 1,
     systemPolicy: sharedSystemPolicy,
     instructions: {
-      "pt-BR": "A partir do texto OCR fornecido, extraia somente candidatos visíveis da ficha. Não cadastre ninguém, não complete letra ilegível e marque revisão humana obrigatória.",
-      en: "From the supplied OCR text, extract only visible form candidates. Do not register anyone, do not guess unreadable text, and require human review.",
-      es: "A partir del texto OCR suministrado, extrae solo candidatos visibles de la ficha. No registres a nadie, no adivines texto ilegible y exige revisión humana.",
+      "pt-BR": "A partir do texto OCR fornecido, extraia somente candidatos visíveis da ficha. Não cadastre ninguém, não complete letra ilegível e marque revisão humana obrigatória. Quando input.context.formType for team_interest_list, siga input.context.candidateConvention quando fornecido: field deve ser o nome visível da pessoa e value deve conter somente as áreas canônicas visivelmente marcadas, separadas por vírgula (presence, table, care, house, discipleship, support). Se candidateConvention não existir, use row_<n>.name e row_<n>.<areaId>. Nunca marque área por inferência.",
+      en: "From the supplied OCR text, extract only visible form candidates. Do not register anyone, do not guess unreadable text, and require human review. When input.context.formType is team_interest_list, follow input.context.candidateConvention when supplied: field is the visible person name and value contains only visibly selected canonical areas, comma-separated (presence, table, care, house, discipleship, support). If candidateConvention is absent, use row_<n>.name and row_<n>.<areaId>. Never infer a selection.",
+      es: "A partir del texto OCR suministrado, extrae solo candidatos visibles de la ficha. No registres a nadie, no adivines texto ilegible y exige revisión humana. Cuando input.context.formType sea team_interest_list, sigue input.context.candidateConvention cuando exista: field es el nombre visible de la persona y value contiene solo las áreas canónicas visiblemente marcadas, separadas por comas (presence, table, care, house, discipleship, support). Si no existe candidateConvention, usa row_<n>.name y row_<n>.<areaId>. Nunca infieras una selección.",
     },
   },
   "affiliate.pin.copy": {
