@@ -1,7 +1,8 @@
 import { TaskRequest, AudioInput, VisionInput, EmbeddingInput, ImageInput, RagQueryRequest, KnowledgeIngestRequest } from "../../../packages/contracts/src/index.js";
 import { verifyNestAiToken, requireCapability, readNestAiTokenHeader, type NestAiClaims } from "../../../packages/auth/src/index.js";
 import { verifyFirebaseAppCheckToken } from "../../../packages/app-check/src/index.js";
-import { classifyPrivacy } from "../../../packages/privacy-firewall/src/index.js";
+import { classifyPrivacy, redactSensitiveText } from "../../../packages/privacy-firewall/src/index.js";
+import { scanPromptInjection, type PromptGuardDecision } from "../../../packages/prompt-guard/src/index.js";
 import { getTask, type TaskDefinition } from "../../../packages/task-registry/src/index.js";
 import { routeCandidates, type RouteDecision } from "../../../packages/router/src/index.js";
 import {
@@ -19,6 +20,9 @@ import {
   extractDocumentsTextWithCloudflare,
   embedWithCloudflare,
   generateImageWithCloudflare,
+  classifyPromptGuardWithGroq,
+  rerankWithCloudflare,
+  generateWithNvidiaEval,
   probeGroq,
   probeGemini,
   probeMistral,
@@ -27,7 +31,7 @@ import {
   type GenerateResult,
   type WorkersAiBinding,
 } from "../../../packages/providers/src/index.js";
-import { assertProviderFreeQuota, assertWithinFreeBudget } from "../../../packages/cost-guard/src/index.js";
+import { assertProviderFreeQuota, assertModelFreeQuota, assertWithinFreeBudget } from "../../../packages/cost-guard/src/index.js";
 import { safeTrace, persistTrace, recordProviderHealthSample, evaluateSloAlerts } from "../../../packages/observability/src/index.js";
 import { incrementUsage, getDimensionalUsage, incrementDimensionalUsage, recordRuntimeEvent, type D1DatabaseLike } from "../../../packages/usage-ledger/src/index.js";
 import { buildTaskPrompt } from "../../../packages/prompt-registry/src/index.js";
@@ -56,6 +60,7 @@ export type Env = {
   GROQ_API_KEY?: string;
   GEMINI_API_KEY?: string;
   MISTRAL_API_KEY?: string;
+  NVIDIA_API_KEY?: string;
   HUB_JWKS_URL: string;
   HUB_TOKEN_ISSUER: string;
   NESTAI_TOKEN_AUDIENCE: string;
@@ -80,6 +85,11 @@ export type Env = {
   AI_CACHE_ENABLED?: "true" | "false";
   AI_VECTORIZE_ENABLED?: "true" | "false";
   AI_R2_WRITES_ENABLED?: "true" | "false";
+  AI_PROMPT_GUARD_ENABLED?: "true" | "false";
+  AI_RAG_RERANK_ENABLED?: "true" | "false";
+  AI_BGE_M3_ENABLED?: "true" | "false";
+  AI_LOCAL_WEBGPU_ENABLED?: "true" | "false";
+  AI_NVIDIA_EVAL_ENABLED?: "true" | "false";
 };
 
 function json(body: unknown, status = 200): Response {
@@ -466,6 +476,51 @@ async function recordProviderAttempt(
       { scopeType: "organization", scopeId: organizationId, provider, task: task.id },
     ]),
   ]);
+}
+
+async function runPromptGuard(
+  env: Env,
+  text: string,
+  options: { untrustedExternalContent: boolean; appId: string; organizationId: string },
+): Promise<PromptGuardDecision> {
+  if (env.AI_PROMPT_GUARD_ENABLED !== "true") {
+    return scanPromptInjection({
+      text,
+      classify: async () => "LABEL_0",
+      untrustedExternalContent: options.untrustedExternalContent,
+    });
+  }
+
+  const minimized = redactSensitiveText(text, "P1_INTERNAL");
+  return scanPromptInjection({
+    text: minimized,
+    untrustedExternalContent: options.untrustedExternalContent,
+    classify: async (segment) => {
+      const usage = await getDimensionalUsage(env.DB, {
+        scopeType: "provider",
+        scopeId: "groq",
+        provider: "groq",
+        task: "security.prompt_injection.detect",
+      });
+      assertModelFreeQuota("groq:prompt-guard-2-86m", usage.provider_calls, "critical");
+      const result = await withTimeout(
+        (signal) => classifyPromptGuardWithGroq(env.GROQ_API_KEY ?? "", segment, signal),
+        5_000,
+      );
+      await incrementDimensionalUsage(env.DB, [
+        { scopeType: "provider", scopeId: "groq", provider: "groq", task: "security.prompt_injection.detect" },
+        { scopeType: "app", scopeId: options.appId, provider: "groq", task: "security.prompt_injection.detect" },
+        { scopeType: "organization", scopeId: options.organizationId, provider: "groq", task: "security.prompt_injection.detect" },
+      ]);
+      return result.label;
+    },
+  });
+}
+
+function assertPromptGuardPolicy(decision: PromptGuardDecision, source: "user" | "retrieved"): void {
+  if (decision.action === "ALLOW") return;
+  if (source === "retrieved") throw new Error("RAG_UNTRUSTED_CONTENT_QUARANTINED");
+  throw new Error(decision.verdict === "malicious" ? "PROMPT_GUARD_BLOCKED" : "PROMPT_GUARD_REVIEW_REQUIRED");
 }
 
 function assertGuestSensitivity(claims: NestAiClaims, sensitivity: ReturnType<typeof classifyPrivacy>["sensitivity"]): void {
