@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { handleRequest, resetHubJwksCacheForTests, type Env } from "../../apps/api/src/index.js";
+import { handleRequest, handleBrowserRequest, resetHubJwksCacheForTests, type Env } from "../../apps/api/src/index.js";
 
 function baseEnv(): Env {
   return {
@@ -203,6 +203,24 @@ describe("Worker API", () => {
     const body = await response.json() as { error: string };
     expect(body.error).toBe("AUTH_GUEST_SENSITIVITY_DENIED");
     fetchMock.mockRestore();
+  });
+
+  it("allows CORS preflight only for exact official ecosystem origins", async () => {
+    const env = baseEnv();
+    const allowed = await handleBrowserRequest(new Request("https://ai.millionsnest.com/v1/run", {
+      method: "OPTIONS",
+      headers: { origin: "https://nestlume.millionsnest.com", "access-control-request-method": "POST" },
+    }), env);
+    expect(allowed.status).toBe(204);
+    expect(allowed.headers.get("access-control-allow-origin")).toBe("https://nestlume.millionsnest.com");
+    expect(allowed.headers.get("access-control-allow-headers")).toContain("x-firebase-appcheck");
+
+    const denied = await handleBrowserRequest(new Request("https://ai.millionsnest.com/v1/run", {
+      method: "OPTIONS",
+      headers: { origin: "https://nestlume.millionsnest.com.attacker.invalid" },
+    }), env);
+    expect(denied.status).toBe(403);
+    expect(denied.headers.get("access-control-allow-origin")).toBeNull();
   });
 
   it("requires authentication for task execution", async () => {
