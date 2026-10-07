@@ -55,6 +55,13 @@ export async function ragOrganizationHash(organizationId: string): Promise<strin
   return Array.from(new Uint8Array(bytes)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 24);
 }
 
+export async function ragScopedSourceId(organizationId: string, appId: string, sourceId: string): Promise<string> {
+  const input = JSON.stringify([organizationId, appId, sourceId]);
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  const digest = Array.from(new Uint8Array(bytes)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return "src-" + digest.slice(0, 48);
+}
+
 export function chunkText(text: string, options: { maxChars?: number; overlapChars?: number } = {}): string[] {
   const maxChars = Math.max(300, options.maxChars ?? 1600);
   const overlap = Math.min(Math.floor(maxChars / 3), Math.max(0, options.overlapChars ?? 200));
@@ -88,10 +95,11 @@ export async function upsertKnowledge(args: {
   if (chunks.length === 0) throw new Error("RAG_SOURCE_EMPTY");
   if (chunks.length > 500) throw new Error("RAG_SOURCE_TOO_LARGE");
   const orgHash = await ragOrganizationHash(args.organizationId);
+  const scopedId = await ragScopedSourceId(args.organizationId, args.appId, args.sourceId);
   const embeddings = await args.embed(chunks);
   if (embeddings.length !== chunks.length) throw new Error("RAG_EMBEDDING_COUNT_MISMATCH");
   await args.vectorize.upsert(chunks.map((text, index) => ({
-    id: args.sourceId + ":" + index,
+    id: scopedId + ":" + index,
     values: embeddings[index]!,
     metadata: {
       sourceId: args.sourceId, appId: args.appId, organizationHash: orgHash, sensitivity: args.sensitivity, locale: args.locale,
@@ -137,14 +145,15 @@ export async function persistKnowledgeSource(
   now = new Date(),
 ): Promise<void> {
   const orgHash = await ragOrganizationHash(args.organizationId);
+  const scopedId = await ragScopedSourceId(args.organizationId, args.appId, args.sourceId);
   await db.prepare(
     "INSERT INTO cp_knowledge_sources(source_id,app_id,organization_id_hash,sensitivity,locale,status,metadata_json,updated_at) " +
     "VALUES (?1,?2,?3,?4,?5,?6,?7,?8) " +
     "ON CONFLICT(source_id) DO UPDATE SET status=excluded.status,metadata_json=excluded.metadata_json,updated_at=excluded.updated_at"
-  ).bind(args.sourceId,args.appId,orgHash,args.sensitivity,args.locale,args.status,JSON.stringify({ chunks: args.chunks, ...(args.metadata ?? {}) }),now.toISOString()).run();
+  ).bind(scopedId,args.appId,orgHash,args.sensitivity,args.locale,args.status,JSON.stringify({ originalSourceId: args.sourceId, chunks: args.chunks, ...(args.metadata ?? {}) }),now.toISOString()).run();
   await db.prepare(
     "INSERT INTO cp_knowledge_indexes(index_id,source_id,version,status,chunks,metadata_json,updated_at) " +
     "VALUES (?1,?2,1,?3,?4,?5,?6) " +
     "ON CONFLICT(index_id) DO UPDATE SET version=version+1,status=excluded.status,chunks=excluded.chunks,metadata_json=excluded.metadata_json,updated_at=excluded.updated_at"
-  ).bind(args.sourceId + ":index",args.sourceId,args.status,args.chunks,JSON.stringify({ vectorDimensions: 768 }),now.toISOString()).run();
+  ).bind(scopedId + ":index",scopedId,args.status,args.chunks,JSON.stringify({ vectorDimensions: 768 }),now.toISOString()).run();
 }
