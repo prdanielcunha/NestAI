@@ -44,6 +44,32 @@ describe("Vectorize RAG defense in depth", () => {
     expect(result[0]?.text).toBe("ok");
   });
 
+  it("uses different Vectorize IDs for identical source names across tenants", async () => {
+    const allIds: string[][] = [];
+    const vectorize = {
+      upsert: async (vectors: Array<{id: string}>) => {
+        allIds.push(vectors.map((item) => item.id));
+        return {};
+      },
+      query: async () => ({ matches: [] }),
+    };
+    for (const organizationId of ["org-1","org-2"]) {
+      await upsertKnowledge({
+        vectorize,
+        sourceId: "shared-source",
+        appId: "nestlume",
+        organizationId,
+        sensitivity: "P1_INTERNAL",
+        locale: "pt-BR",
+        text: "Source text for scoped knowledge.",
+        embed: async () => [[0.1, 0.2]],
+      });
+    }
+    expect(allIds).toHaveLength(2);
+    expect(allIds[0]?.[0]).not.toBe(allIds[1]?.[0]);
+    expect((allIds[0]?.[0] ?? "").length).toBeLessThanOrEqual(64);
+  });
+
   it("refuses P4 ingestion before embedding", async () => {
     let embedded = false;
     await expect(upsertKnowledge({
