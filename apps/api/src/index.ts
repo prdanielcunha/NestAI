@@ -35,7 +35,7 @@ import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, contr
 import { validateAppManifest, assertManifestTaskOwnership, persistAppManifest } from "../../../packages/app-manifest/src/index.js";
 import { verifyGitHubWorkloadToken } from "../../../packages/workload-auth/src/index.js";
 import { queryKnowledge, upsertKnowledge, persistKnowledgeSource, ragOrganizationHash, ragScopedSourceId, type VectorizeLike } from "../../../packages/rag/src/index.js";
-import { getR2Usage, putR2Object, r2Utf8Size, type R2BucketLike } from "../../../packages/r2-storage/src/index.js";
+import { getR2Usage, putR2Object, r2Utf8Size, reconcileR2Inventory, type R2BucketLike } from "../../../packages/r2-storage/src/index.js";
 
 type RateLimiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
 
@@ -1693,6 +1693,26 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 export async function handleScheduled(_controller: unknown, env: Env): Promise<void> {
   await syncStaticControlPlane(env.DB);
   await evaluateSloAlerts(env.DB);
+
+  const now = new Date();
+  if (
+    env.AI_R2_WRITES_ENABLED === "true" &&
+    env.KNOWLEDGE_BUCKET &&
+    now.getUTCHours() === 3 &&
+    now.getUTCMinutes() < 15
+  ) {
+    try {
+      await reconcileR2Inventory(env.KNOWLEDGE_BUCKET, env.DB, now);
+    } catch (error) {
+      await recordRuntimeEvent(env.DB, {
+        id: crypto.randomUUID(),
+        eventType: "r2_reconcile_failed",
+        appId: "nestai",
+        task: "storage.reconcile",
+      }, now);
+      console.error(JSON.stringify({ code: errorCode(error), task: "storage.reconcile" }));
+    }
+  }
 }
 
 const allowedBrowserOrigins = new Set([
