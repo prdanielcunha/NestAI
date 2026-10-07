@@ -41,7 +41,7 @@ import { CircuitBreaker, executeWithSafeFallback } from "../../../packages/resil
 import type { Locale } from "../../../packages/i18n/src/index.js";
 import { cacheGet, cachePut, type KvNamespaceLike } from "../../../packages/cache/src/index.js";
 import { createJob, enqueueJob, getJobForScope, getJobResult, nextAttempt, putJobResult, retryDelaySeconds, updateJobStatus, type JobEnvelope, type QueueLike } from "../../../packages/jobs/src/index.js";
-import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit, controlPlaneRoutes, controlPlanePrompts, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota, syncStaticControlPlane, recordEvaluationProbe, createControlPlaneDraft, promoteControlPlaneDraft, recordPromptDraftEvaluation, getPromptDraftInstructions, getActivePromptOverride, applyActiveRoutePreference, applyActivePolicyOverlay } from "../../../packages/control-plane/src/index.js";
+import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit, controlPlaneRoutes, controlPlanePrompts, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota, syncStaticControlPlane, recordEvaluationProbe, createControlPlaneDraft, promoteControlPlaneDraft, recordPromptDraftEvaluation, getPromptDraftInstructions, getActivePromptOverride, applyActiveRoutePreference, applyActivePolicyOverlay, controlPlanePromptsResolved, controlPlaneRoutesResolved, controlPlanePoliciesResolved } from "../../../packages/control-plane/src/index.js";
 import { validateAppManifest, assertManifestTaskOwnership, persistAppManifest } from "../../../packages/app-manifest/src/index.js";
 import { verifyGitHubWorkloadToken } from "../../../packages/workload-auth/src/index.js";
 import { queryKnowledge, upsertKnowledge, persistKnowledgeSource, ragOrganizationHash, ragScopedSourceId, applyRerankResults, type VectorizeLike, type RetrievedEvidence } from "../../../packages/rag/src/index.js";
@@ -998,13 +998,13 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       if (url.pathname === "/v1/admin/apps") return json({ apps: controlPlaneApps() });
       if (url.pathname === "/v1/admin/tasks") return json({ tasks: controlPlaneTasks() });
       if (url.pathname === "/v1/admin/providers") return json({ providers: controlPlaneProviders() });
-      if (url.pathname === "/v1/admin/routes") return json({ routes: controlPlaneRoutes() });
-      if (url.pathname === "/v1/admin/prompts") return json({ prompts: controlPlanePrompts() });
+      if (url.pathname === "/v1/admin/routes") return json({ routes: await controlPlaneRoutesResolved(env.DB) });
+      if (url.pathname === "/v1/admin/prompts") return json({ prompts: await controlPlanePromptsResolved(env.DB) });
       if (url.pathname === "/v1/admin/knowledge") return json(await controlPlaneKnowledge(env.DB));
       if (url.pathname === "/v1/admin/evals") return json(await controlPlaneEvaluations(env.DB));
       if (url.pathname === "/v1/admin/observability") return json(await controlPlaneObservability(env.DB));
       if (url.pathname === "/v1/admin/cost") return json(await controlPlaneCostQuota(env.DB));
-      if (url.pathname === "/v1/admin/policies") return json({ policies: controlPlanePolicies() });
+      if (url.pathname === "/v1/admin/policies") return json({ policies: await controlPlanePoliciesResolved(env.DB) });
       if (url.pathname === "/v1/admin/audit") return json({ events: await controlPlaneAudit(env.DB, Number(url.searchParams.get("limit") ?? 100)) });
       return json({ error: "NOT_FOUND" }, 404);
     } catch (error) {
