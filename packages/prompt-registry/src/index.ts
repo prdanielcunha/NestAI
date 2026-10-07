@@ -55,6 +55,17 @@ export const prompts: Record<string, PromptDefinition> = {
       es: "Responde como apoyo de estudio. Distingue texto fuente, interpretación e inferencia. Cuando haya evidencia recuperada, cita solo la evidencia suministrada.",
     },
   },
+  "nestlume.study.grounded": {
+    id: "nestlume.study.grounded",
+    taskId: "nestlume.study.grounded",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Use EXCLUSIVAMENTE as evidências textuais fornecidas. Não complete lacunas com conhecimento externo. Toda afirmação em claims precisa apontar para evidenceIds existentes e realmente sustentados. Separe observação, interpretação e hipótese. Se a evidência for insuficiente, indique limites; não invente fontes, idiomas originais, datas ou consenso histórico. A answer deve sintetizar apenas as claims. Responda somente JSON.",
+      en: "Use ONLY the supplied textual evidence. Every claim must cite evidenceIds that exist and support it. Distinguish observation, interpretation, and hypothesis. Do not fill evidence gaps or invent sources, language facts, dates or historical consensus. The answer may only summarize the claims. Return JSON only.",
+      es: "Usa SOLO la evidencia textual suministrada. Cada afirmación debe citar evidenceIds existentes que la sustenten. Distingue observación, interpretación e hipótesis. No inventes fuentes, datos lingüísticos, fechas ni consenso histórico. La respuesta debe resumir solo las afirmaciones. Devuelve solo JSON.",
+    },
+  },
   "journey.form.extract": {
     id: "journey.form.extract",
     taskId: "journey.form.extract",
