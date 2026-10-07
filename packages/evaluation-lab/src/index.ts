@@ -191,3 +191,80 @@ export async function runEvalSuite(args: {
   const aggregate = aggregateEval(results);
   return { results, aggregate, gate: promotionGate(aggregate, args.threshold) };
 }
+
+
+export type EvalTargetKind = "text_model" | "embedding_model" | "reranker";
+export type EvalTarget = {
+  id: string;
+  kind: EvalTargetKind;
+  provider: "groq" | "cloudflare" | "nvidia-nim";
+  modelId: string;
+  stage: PromotionStage;
+  sanitizedOnly: true;
+  maxSensitivity: "P0_PUBLIC" | "P1_INTERNAL";
+  customerTrafficAllowed: false;
+  productionTrafficAllowed: false;
+};
+
+export const evalTargets: Record<string, EvalTarget> = {
+  "groq:qwen3.8-27b": {
+    id: "groq:qwen3.8-27b",
+    kind: "text_model",
+    provider: "groq",
+    modelId: "qwen/qwen3.8-27b",
+    stage: "candidate",
+    sanitizedOnly: true,
+    maxSensitivity: "P1_INTERNAL",
+    customerTrafficAllowed: false,
+    productionTrafficAllowed: false,
+  },
+  "cloudflare:bge-m3": {
+    id: "cloudflare:bge-m3",
+    kind: "embedding_model",
+    provider: "cloudflare",
+    modelId: "@cf/baai/bge-m3",
+    stage: "candidate",
+    sanitizedOnly: true,
+    maxSensitivity: "P1_INTERNAL",
+    customerTrafficAllowed: false,
+    productionTrafficAllowed: false,
+  },
+  "cloudflare:bge-reranker-base": {
+    id: "cloudflare:bge-reranker-base",
+    kind: "reranker",
+    provider: "cloudflare",
+    modelId: "@cf/baai/bge-reranker-base",
+    stage: "candidate",
+    sanitizedOnly: true,
+    maxSensitivity: "P1_INTERNAL",
+    customerTrafficAllowed: false,
+    productionTrafficAllowed: false,
+  },
+  "nvidia-nim:gpt-oss-20b-eval": {
+    id: "nvidia-nim:gpt-oss-20b-eval",
+    kind: "text_model",
+    provider: "nvidia-nim",
+    modelId: "openai/gpt-oss-20b",
+    stage: "candidate",
+    sanitizedOnly: true,
+    maxSensitivity: "P1_INTERNAL",
+    customerTrafficAllowed: false,
+    productionTrafficAllowed: false,
+  },
+};
+
+export function assertEvalTargetAllowed(args: {
+  targetId: string;
+  sanitized: boolean;
+  sensitivity: EvalCase["sensitivity"];
+  customerTraffic?: boolean;
+}): EvalTarget {
+  const target = evalTargets[args.targetId];
+  if (!target) throw new Error("EVAL_TARGET_NOT_REGISTERED");
+  if (args.sanitized !== true) throw new Error("EVAL_TARGET_REQUIRES_SANITIZED_INPUT");
+  if (args.customerTraffic === true) throw new Error("EVAL_TARGET_CUSTOMER_TRAFFIC_DENIED");
+  if (args.sensitivity === "P2_PERSONAL" || args.sensitivity === "P3_SENSITIVE" || args.sensitivity === "P4_RESTRICTED") {
+    throw new Error("EVAL_TARGET_SENSITIVITY_DENIED");
+  }
+  return target;
+}
