@@ -254,6 +254,7 @@ export async function deleteR2Object(
   priority: R2Priority = "background",
   now = new Date(),
 ): Promise<void> {
+  void priority; // Kept for API compatibility; R2 DeleteObject is free and must not reserve paid-risk quota.
   const previousSize = await trackedObjectSize(db, key, now);
   // DeleteObject is free in R2 Standard; it should not consume the paid-risk
   // Class A reserve. Storage accounting is still reduced after deletion.
