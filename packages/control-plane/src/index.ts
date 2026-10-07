@@ -608,3 +608,24 @@ export async function getPromptDraftInstructions(
   if (!row) throw new Error("CONTROL_PLANE_DRAFT_NOT_FOUND");
   return validatePromptDraft(promptId, JSON.parse(row.content_json) as DynamicPromptDraft).instructions;
 }
+
+
+export async function getActivePromptOverride(
+  db: D1DatabaseLike,
+  promptId: string,
+): Promise<{ instructions: DynamicPromptDraft["instructions"]; version: number } | null> {
+  const row = await db.prepare(
+    "SELECT p.current_version AS version,v.content_json AS content_json FROM cp_prompts p JOIN cp_prompt_versions v ON v.prompt_id=p.prompt_id AND v.version=p.current_version WHERE p.prompt_id=?1 AND p.status='production'"
+  ).bind(promptId).first<{ version: number; content_json: string }>();
+  if (!row) return null;
+  try {
+    const parsed = JSON.parse(row.content_json) as Record<string, unknown>;
+    if (!("instructions" in parsed)) return null;
+    return {
+      instructions: validatePromptDraft(promptId, parsed as DynamicPromptDraft).instructions,
+      version: Number(row.version),
+    };
+  } catch {
+    return null;
+  }
+}
