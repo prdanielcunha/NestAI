@@ -18,7 +18,17 @@ export const ecosystemApps: AppManifest[] = [
   { appId: "nestlocal", displayName: "NestLocal", allowedTasks: ["nestlocal.request.extract","nestlocal.quote.compose","nestlocal.followup.compose"], defaultLocale: "pt-BR", enabled: true },
   { appId: "nestjourney", displayName: "NestJourney", allowedTasks: ["journey.form.extract","journey.followup.summarize"], defaultLocale: "pt-BR", enabled: true },
   { appId: "nestfinance", displayName: "NestFinance", allowedTasks: ["finance.receipt.extract","finance.report.explain"], defaultLocale: "pt-BR", enabled: true },
-  { appId: "musicscale", displayName: "MusicScale", allowedTasks: ["musicscale.song.structure","musicscale.team.message.compose"], defaultLocale: "pt-BR", enabled: true },
+  { appId: "musicscale", displayName: "MusicScale", allowedTasks: [
+    "musicscale.song.structure",
+    "musicscale.team.message.compose",
+    "musicscale.live.diagnostic.explain",
+    "musicscale.live.song-match.assist",
+    "musicscale.live.request.classify",
+    "musicscale.live.search.interpret",
+    "musicscale.live.metadata.normalize",
+    "musicscale.live.post-service.summary",
+    "musicscale.live.pre-service-risk.explain",
+  ], defaultLocale: "pt-BR", enabled: true },
   { appId: "nestlume", displayName: "NestLume", allowedTasks: ["nestlume.study.answer","nestlume.study.grounded","nestlume.entity.explain","nestlume.embedding.generate"], defaultLocale: "pt-BR", enabled: true },
   { appId: "nestaffiliate", displayName: "NestAffiliate", allowedTasks: ["affiliate.product.analyze","affiliate.pin.copy","affiliate.creative.generate"], defaultLocale: "pt-BR", enabled: true },
 ];
