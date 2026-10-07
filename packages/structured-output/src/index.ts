@@ -263,6 +263,21 @@ export function validateStructuredText(taskId: string, text: string): unknown {
   return result.data;
 }
 
+export function assertGroundedEvidenceInput(taskId: string, input: unknown): void {
+  if (taskId !== "nestlume.study.grounded") return;
+  assertGroundedEvidenceInput(taskId, input);
+  const request = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const evidence = request.evidence;
+  if (!Array.isArray(evidence) || evidence.length < 1 || evidence.length > 12) throw new Error("EVIDENCE_REQUIRED");
+  const valid = evidence.every((item) => item && typeof item === "object"
+    && typeof (item as { id?: unknown }).id === "string"
+    && typeof (item as { text?: unknown }).text === "string"
+    && ((item as { text: string }).text.trim().length > 0)
+    && ((item as { text: string }).text.length <= 4000));
+  const ids = evidence.map((item) => (item as { id: string }).id);
+  if (!valid || new Set(ids).size !== evidence.length) throw new Error("EVIDENCE_INVALID");
+}
+
 export function verifyGroundedEvidence(taskId: string, input: unknown, output: unknown): void {
   if (taskId !== "nestlume.study.grounded") return;
   const request = input && typeof input === "object" ? input as Record<string, unknown> : {};
