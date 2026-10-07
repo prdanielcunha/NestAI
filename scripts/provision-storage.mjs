@@ -63,6 +63,8 @@ config.queues={
   }]
 };
 
+// Retry provisioning after Cloudflare API token permission upgrades.
+// RAG remains fail-closed until index discovery confirms the resource.
 let vectorizeReady=false;
 try {
   let indexes=listArray(json(["vectorize","list","--json"]));
