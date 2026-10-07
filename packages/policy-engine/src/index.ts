@@ -16,3 +16,21 @@ export function assertFreeOnlyInvariant(env:Record<string,string|undefined>) {
   if (env.AUTO_UPGRADE_PROVIDER !== "false") throw new Error("BOOT_REFUSED: auto upgrade must be false");
   if (env.AI_PAID_ENABLED !== "false") throw new Error("BOOT_REFUSED: paid providers must be disabled");
 }
+
+
+export type PromptGuardPolicyInput = {
+  verdict: "benign" | "malicious" | "uncertain";
+  source: "user" | "retrieved";
+  criticalAction: boolean;
+};
+
+export type PromptGuardPolicyAction = "ALLOW" | "QUARANTINE" | "REVIEW";
+
+export function promptGuardPolicy(input: PromptGuardPolicyInput): PromptGuardPolicyAction {
+  if (input.verdict === "benign") return "ALLOW";
+  if (input.source === "retrieved") return "QUARANTINE";
+  // Prompt Guard is evidence for the Policy Engine, not an authorization
+  // authority. Potential false positives never trigger writes or tools.
+  if (input.criticalAction) return "REVIEW";
+  return "REVIEW";
+}
