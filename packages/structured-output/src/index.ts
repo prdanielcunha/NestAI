@@ -41,6 +41,16 @@ const affiliateProductSchema = z.object({
   unknowns: z.array(z.string()),
 });
 
+const nestlumeStudySchema = z.object({
+  answer: z.string().min(1).max(8000),
+  claims: z.array(z.object({
+    text: z.string().min(1).max(1500),
+    evidenceIds: z.array(z.string().min(1)).min(1).max(4),
+    certainty: z.enum(["high","medium","low"]),
+  })).min(1).max(12),
+  limitations: z.array(z.string().max(1000)).max(8),
+});
+
 const receiptSchema = z.object({
   merchant: z.string().nullable(),
   amount: z.number().nonnegative().nullable(),
@@ -68,6 +78,30 @@ const affiliatePinSchema = z.object({
 });
 
 export const structuredContracts: Record<string, StructuredContract> = {
+  "nestlume.study.answer": {
+    id: "nestlume.study.answer.v2",
+    schema: nestlumeStudySchema,
+    jsonSchema: {
+      type: "object", additionalProperties: false,
+      required: ["answer","claims","limitations"],
+      properties: {
+        answer: { type: "string", minLength: 1, maxLength: 8000 },
+        claims: {
+          type: "array", minItems: 1, maxItems: 12,
+          items: {
+            type: "object", additionalProperties: false,
+            required: ["text","evidenceIds","certainty"],
+            properties: {
+              text: { type: "string", minLength: 1, maxLength: 1500 },
+              evidenceIds: { type: "array", minItems: 1, maxItems: 4, items: { type: "string", minLength: 1 } },
+              certainty: { enum: ["high","medium","low"] },
+            },
+          },
+        },
+        limitations: { type: "array", maxItems: 8, items: { type: "string", maxLength: 1000 } },
+      },
+    },
+  },
   "connect.message.classify": {
     id: "connect.message.classify.v1",
     schema: connectClassifySchema,
@@ -227,4 +261,26 @@ export function validateStructuredText(taskId: string, text: string): unknown {
   const result = contract.schema.safeParse(parsed);
   if (!result.success) throw new Error("OUTPUT_SCHEMA_VALIDATION_FAILED");
   return result.data;
+}
+
+export function verifyGroundedEvidence(taskId: string, input: unknown, output: unknown): void {
+  if (taskId !== "nestlume.study.answer") return;
+  const request = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const raw = Array.isArray(request.evidence) ? request.evidence : [];
+  const evidenceIds = new Set(raw
+    .filter((item): item is { id: string; text: string } =>
+      typeof item === "object" && item !== null
+      && typeof (item as { id?: unknown }).id === "string"
+      && typeof (item as { text?: unknown }).text === "string"
+      && ((item as { text: string }).text.trim().length > 0))
+    .map((item) => item.id));
+  if (evidenceIds.size === 0 || evidenceIds.size > 12) throw new Error("EVIDENCE_REQUIRED");
+  const claims = (output as { claims?: Array<{ evidenceIds?: string[] }> })?.claims;
+  if (!Array.isArray(claims) || claims.length === 0) throw new Error("EVIDENCE_CLAIMS_MISSING");
+  for (const claim of claims) {
+    if (!Array.isArray(claim.evidenceIds) || claim.evidenceIds.length === 0
+      || claim.evidenceIds.some((id) => !evidenceIds.has(id))) {
+      throw new Error("EVIDENCE_REF_INVALID");
+    }
+  }
 }
