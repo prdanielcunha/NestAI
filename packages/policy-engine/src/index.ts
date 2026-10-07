@@ -4,7 +4,8 @@ export type ProviderPolicy = { id:string; freeEligible:boolean; paidRequired:boo
 const rank:Sensitivity[]=["P0_PUBLIC","P1_INTERNAL","P2_PERSONAL","P3_SENSITIVE","P4_RESTRICTED"];
 
 export function providerAllowed(args:{sensitivity:Sensitivity; provider:ProviderPolicy; billingMode:BillingMode}) {
-  if (args.sensitivity === "P4_RESTRICTED") return false;
+  // P4 may only be processed by an explicitly local/on-device provider.
+  if (args.sensitivity === "P4_RESTRICTED" && args.provider.id !== "local-webgpu") return false;
   if (args.billingMode === "FREE_ONLY" && (!args.provider.freeEligible || args.provider.paidRequired)) return false;
   return rank.indexOf(args.sensitivity) <= rank.indexOf(args.provider.maxSensitivity);
 }
