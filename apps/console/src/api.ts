@@ -169,20 +169,23 @@ export async function health(): Promise<Health> {
   return parseJson<Health>(response);
 }
 
-async function adminFetch<T>(path:string):Promise<T> {
+async function adminRequest<T>(path:string, init:RequestInit = {}):Promise<T> {
   const [token, appCheck] = await Promise.all([client.getAccessToken(), appCheckToken()]);
-  const response = await fetch(path, {
-    headers: {
-      authorization: "Bearer " + token,
-      "x-firebase-appcheck": appCheck,
-      "x-millionsnest-app": APP_ID,
-      "x-millionsnest-org": ORG_SCOPE,
-      accept: "application/json",
-    },
-  });
+  const headers = new Headers(init.headers);
+  headers.set("authorization", "Bearer " + token);
+  headers.set("x-firebase-appcheck", appCheck);
+  headers.set("x-millionsnest-app", APP_ID);
+  headers.set("x-millionsnest-org", ORG_SCOPE);
+  headers.set("accept", "application/json");
+  if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
+  const response = await fetch(path, { ...init, headers });
   const body = await parseJson<T & {error?:string}>(response);
   if (!response.ok) throw new Error(body.error ?? "ADMIN_HTTP_" + response.status);
   return body;
+}
+
+async function adminFetch<T>(path:string):Promise<T> {
+  return adminRequest<T>(path);
 }
 
 export function overview(): Promise<OverviewData> { return adminFetch("/v1/admin/overview"); }
@@ -199,3 +202,46 @@ export function policies(): Promise<PoliciesData> { return adminFetch("/v1/admin
 export function audit(): Promise<AuditData> { return adminFetch("/v1/admin/audit"); }
 
 export { client };
+
+
+export type EvalProbeInput = {
+  targetId: "groq:qwen3.8-27b" | "cloudflare:bge-m3" | "cloudflare:bge-reranker-base" | "nvidia-nim:gpt-oss-20b-eval";
+  sanitized: true;
+  sensitivity: "P0_PUBLIC" | "P1_INTERNAL";
+  prompt?: string;
+  texts?: string[];
+  query?: string;
+  contexts?: string[];
+};
+export type EvalProbeResult = {
+  requestId: string;
+  runId: string;
+  target: string;
+  stage: string;
+  latencyMs: number;
+  result: unknown;
+};
+export function runEvalProbe(input: EvalProbeInput): Promise<EvalProbeResult> {
+  return adminRequest("/v1/admin/evals/probe", { method: "POST", body: JSON.stringify(input) });
+}
+
+export type KnowledgeIngestInput = {
+  sourceId: string;
+  appId: string;
+  organizationId: string;
+  sensitivity: "P0_PUBLIC" | "P1_INTERNAL" | "P2_PERSONAL" | "P3_SENSITIVE" | "P4_RESTRICTED";
+  locale: "pt-BR" | "en" | "es";
+  title?: string;
+  locatorPrefix?: string;
+  text: string;
+};
+export type KnowledgeIngestResult = {
+  requestId: string;
+  sourceId: string;
+  status: string;
+  chunks: number;
+  storage: { r2: string; quotaHealth: string | null };
+};
+export function ingestKnowledge(input: KnowledgeIngestInput): Promise<KnowledgeIngestResult> {
+  return adminRequest("/v1/admin/knowledge/ingest", { method: "POST", body: JSON.stringify(input) });
+}
