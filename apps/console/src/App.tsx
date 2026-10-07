@@ -327,38 +327,142 @@ function PromptsPage({ data }: { data: api.PromptsData | null }) {
 function KnowledgePage({ data }: { data: api.KnowledgeData | null }) {
   const sources = data?.sources ?? [];
   const indexes = data?.indexes ?? [];
+  const [sourceId, setSourceId] = useState("");
+  const [appId, setAppId] = useState("nestlume");
+  const [organizationId, setOrganizationId] = useState("");
+  const [locale, setLocale] = useState<"pt-BR" | "en" | "es">("pt-BR");
+  const [sensitivity, setSensitivity] = useState<"P0_PUBLIC" | "P1_INTERNAL">("P0_PUBLIC");
+  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
+  const [actionStatus, setActionStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function ingest() {
+    if (!sourceId.trim() || !organizationId.trim() || !text.trim()) {
+      setActionStatus("Source ID, organization and text are required.");
+      return;
+    }
+    setBusy(true);
+    setActionStatus("");
+    try {
+      const result = await api.ingestKnowledge({
+        sourceId: sourceId.trim(),
+        appId,
+        organizationId: organizationId.trim(),
+        sensitivity,
+        locale,
+        ...(title.trim() ? { title: title.trim() } : {}),
+        text: text.trim(),
+      });
+      setActionStatus(`Indexed ${result.chunks} chunk(s) · R2 ${result.storage.r2} · ${result.storage.quotaHealth ?? "n/a"}`);
+    } catch (error) {
+      setActionStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="page-grid">
       <PageIntro eyebrow="RAG / EVIDENCE" title="Knowledge" text="Sources and indexes remain tenant, app, locale and sensitivity scoped." />
       <Card title="Sources" eyebrow="AUTHORIZED" className="span-7">
-        {sources.length ? <JsonPreview value={sources} /> : <Empty text="No indexed source yet. Additions are blocked until the Vectorize/R2 pipeline is certified." />}
+        {sources.length ? <JsonPreview value={sources} /> : <Empty text="No indexed source yet." />}
       </Card>
       <Card title="Indexes" eyebrow="SAFE REINDEX" className="span-5">
         {indexes.length ? <JsonPreview value={indexes} /> : <Empty text="No production index yet." />}
-        <button className="secondary" disabled>Reindex safely</button>
+      </Card>
+      <Card title="Ingest / reindex source" eyebrow="ADMIN · P0/P1 ONLY" className="span-12">
+        <div className="form-grid">
+          <label className="field-label">Source ID<input value={sourceId} onChange={(e) => setSourceId(e.target.value)} placeholder="docs:study-guide:v1" /></label>
+          <label className="field-label">Organization<input value={organizationId} onChange={(e) => setOrganizationId(e.target.value)} placeholder="organization id" /></label>
+          <label className="field-label">App
+            <select value={appId} onChange={(e) => setAppId(e.target.value)}>
+              {["millionsnest","musicscale","nestfinance","connect","nestjourney","nestlocal","nestaffiliate","nestlume"].map((id) => <option value={id} key={id}>{id}</option>)}
+            </select>
+          </label>
+          <label className="field-label">Locale
+            <select value={locale} onChange={(e) => setLocale(e.target.value as typeof locale)}>
+              <option value="pt-BR">pt-BR</option><option value="en">en</option><option value="es">es</option>
+            </select>
+          </label>
+          <label className="field-label">Sensitivity
+            <select value={sensitivity} onChange={(e) => setSensitivity(e.target.value as typeof sensitivity)}>
+              <option value="P0_PUBLIC">P0_PUBLIC</option><option value="P1_INTERNAL">P1_INTERNAL</option>
+            </select>
+          </label>
+          <label className="field-label">Title<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Optional source title" /></label>
+        </div>
+        <label className="field-label" htmlFor="knowledge-text">Sanitized source text</label>
+        <textarea id="knowledge-text" className="test-input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste authorized P0/P1 knowledge…" />
+        <div className="sticky-actions">
+          <button className="primary" onClick={() => void ingest()} disabled={busy || !sourceId.trim() || !organizationId.trim() || !text.trim()}>
+            {busy ? "Indexing…" : "Ingest / reindex"}
+          </button>
+          {actionStatus && <span className="muted" role="status">{actionStatus}</span>}
+        </div>
       </Card>
     </div>
   );
 }
-
 function EvaluationsPage({ data }: { data: api.EvaluationsData | null }) {
   const suites = data?.suites ?? [];
   const runs = data?.runs ?? [];
+  const [target, setTarget] = useState<api.EvalProbeInput["targetId"]>("cloudflare:bge-m3");
+  const [probeResult, setProbeResult] = useState<api.EvalProbeResult | null>(null);
+  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function runProbe() {
+    setBusy(true);
+    setStatus("");
+    setProbeResult(null);
+    try {
+      const base = { targetId: target, sanitized: true as const, sensitivity: "P0_PUBLIC" as const };
+      const payload: api.EvalProbeInput =
+        target === "cloudflare:bge-m3"
+          ? { ...base, texts: ["NestAI sanitized multilingual evaluation sample.", "Amostra sanitizada de avaliação do NestAI."] }
+          : target === "cloudflare:bge-reranker-base"
+            ? { ...base, query: "NestAI zero-cost safe routing", contexts: ["NestAI routes free eligible models.", "Paid fallback stays locked.", "Unrelated synthetic context."] }
+            : { ...base, prompt: "Synthetic evaluation only. Reply exactly with OK." };
+      const result = await api.runEvalProbe(payload);
+      setProbeResult(result);
+      setStatus(`Live probe passed · ${result.target} · ${result.latencyMs} ms`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="page-grid">
       <PageIntro eyebrow="QUALITY GATE" title="Evaluations" text="Golden datasets and regression gates decide promotion — not intuition." />
       <div className="metrics-grid span-12">
-        <Metric label="Quality" value="—" sub="awaiting certified run" />
-        <Metric label="Groundedness" value="—" sub="awaiting certified run" />
-        <Metric label="Schema" value="—" sub="awaiting certified run" />
-        <Metric label="Privacy" value="100" sub="policy suite" />
+        <Metric label="Persisted suites" value={suites.length} sub="D1 evaluation registry" />
+        <Metric label="Persisted runs" value={runs.length} sub="auditable live probes" />
+        <Metric label="Privacy" value="100" sub="sanitized-only evaluation boundary" />
+        <Metric label="Production traffic" value="0" sub="candidate targets are eval-only" />
       </div>
+      <Card title="Run sanitized live probe" eyebrow="EVALUATION LAB" className="span-12">
+        <label className="field-label">Candidate target
+          <select value={target} onChange={(e) => setTarget(e.target.value as api.EvalProbeInput["targetId"])}>
+            <option value="cloudflare:bge-m3">Cloudflare · BGE-M3 embedding</option>
+            <option value="cloudflare:bge-reranker-base">Cloudflare · BGE reranker</option>
+            <option value="groq:qwen3.8-27b">Groq · Qwen 3.8 27B candidate</option>
+            <option value="nvidia-nim:gpt-oss-20b-eval">NVIDIA NIM · GPT-OSS 20B eval-only</option>
+          </select>
+        </label>
+        <div className="sticky-actions">
+          <button className="primary" onClick={() => void runProbe()} disabled={busy}>{busy ? "Running…" : "Run sanitized live probe"}</button>
+          {status && <span className="muted" role="status">{status}</span>}
+        </div>
+        {probeResult && <JsonPreview value={probeResult} />}
+      </Card>
       <Card title="Eval suites" className="span-6">{suites.length ? <JsonPreview value={suites} /> : <Empty text="No persisted eval suite yet." />}</Card>
       <Card title="Recent runs" className="span-6">{runs.length ? <JsonPreview value={runs} /> : <Empty text="No persisted eval run yet." />}</Card>
     </div>
   );
 }
-
 function ObservabilityPage({ data }: { data: api.ObservabilityData | null }) {
   const providerHealth = data?.providerHealth ?? [];
   const events = data?.events ?? [];
