@@ -665,7 +665,7 @@ export async function controlPlaneRoutesResolved(db: D1DatabaseLike) {
   return base.map((route)=>{
     const row = active.get(route.id);
     if (!row) return { ...route, currentVersion: route.version, providerOrder: route.candidates.map((candidate)=>candidate.provider) };
-    let providerOrder = route.candidates.map((candidate)=>candidate.provider);
+    let providerOrder: string[] = route.candidates.map((candidate)=>candidate.provider);
     try {
       const parsed = JSON.parse(row.config_json) as Record<string, unknown>;
       if ("providerOrder" in parsed) providerOrder = validateRouteDraft(route.task, parsed as DynamicRouteDraft).providerOrder;
