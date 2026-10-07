@@ -1,0 +1,26 @@
+name: Audit ecosystem NestAI cutover
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Unit tests — no network or provider costs
+        run: node --test tests/audit-ecosystem-cutover.test.mjs
+      - name: Audit eight production application repositories
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/audit-ecosystem-cutover.mjs
+      - name: Publish audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecosystem-cutover-source-certification
+          path: ecosystem-cutover-report.json
+          if-no-files-found: warn
