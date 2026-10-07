@@ -209,6 +209,66 @@ const receiptSchema = z.object({
   missingFields: z.array(z.string()),
 });
 
+const financeCountFieldsSchema = z.object({
+  fields: z.array(z.object({
+    key: z.enum(["tithe","offering","other_income","pix"]),
+    status: z.enum(["recognized","uncertain","unreadable","blank"]),
+    observation: z.string().max(64),
+  })).length(4),
+});
+
+const financeDenominationFieldsSchema = z.object({
+  fields: z.array(z.object({
+    cellKey: z.enum(["tithe:10000","tithe:5000","tithe:2000","tithe:1000","tithe:500","tithe:200","tithe:100","tithe:50","tithe:25","tithe:10","tithe:5","offering:10000","offering:5000","offering:2000","offering:1000","offering:500","offering:200","offering:100","offering:50","offering:25","offering:10","offering:5","other:10000","other:5000","other:2000","other:1000","other:500","other:200","other:100","other:50","other:25","other:10","other:5"] as [string, ...string[]]),
+    status: z.enum(["recognized","uncertain","unreadable","blank"]),
+    observation: z.string().max(16),
+  })).length(33),
+});
+
+const financeDocumentFieldsSchema = z.object({
+  fields: z.array(z.object({
+    key: z.enum(["document_type","transaction_kind","counterparty_name","issuer_tax_id","recipient_tax_id","payer_tax_id","payee_tax_id","document_number","total_amount","currency","occurred_at","due_date","settlement_state","payment_method","description","category_id","document_multiplicity"] as [string, ...string[]]),
+    status: z.enum(["recognized","uncertain","absent"]),
+    observation: z.string().max(240),
+  })).length(17),
+});
+
+const financeCountFieldsJsonSchema: JsonSchema = {
+  type:"object", additionalProperties:false, required:["fields"],
+  properties:{fields:{type:"array",minItems:4,maxItems:4,items:{
+    type:"object",additionalProperties:false,required:["key","status","observation"],
+    properties:{
+      key:{enum:["tithe","offering","other_income","pix"]},
+      status:{enum:["recognized","uncertain","unreadable","blank"]},
+      observation:{type:"string",maxLength:64}
+    }
+  }}}
+};
+
+const financeDenominationFieldsJsonSchema: JsonSchema = {
+  type:"object", additionalProperties:false, required:["fields"],
+  properties:{fields:{type:"array",minItems:33,maxItems:33,items:{
+    type:"object",additionalProperties:false,required:["cellKey","status","observation"],
+    properties:{
+      cellKey:{enum:["tithe:10000","tithe:5000","tithe:2000","tithe:1000","tithe:500","tithe:200","tithe:100","tithe:50","tithe:25","tithe:10","tithe:5","offering:10000","offering:5000","offering:2000","offering:1000","offering:500","offering:200","offering:100","offering:50","offering:25","offering:10","offering:5","other:10000","other:5000","other:2000","other:1000","other:500","other:200","other:100","other:50","other:25","other:10","other:5"]},
+      status:{enum:["recognized","uncertain","unreadable","blank"]},
+      observation:{type:"string",maxLength:16}
+    }
+  }}}
+};
+
+const financeDocumentFieldsJsonSchema: JsonSchema = {
+  type:"object", additionalProperties:false, required:["fields"],
+  properties:{fields:{type:"array",minItems:17,maxItems:17,items:{
+    type:"object",additionalProperties:false,required:["key","status","observation"],
+    properties:{
+      key:{enum:["document_type","transaction_kind","counterparty_name","issuer_tax_id","recipient_tax_id","payer_tax_id","payee_tax_id","document_number","total_amount","currency","occurred_at","due_date","settlement_state","payment_method","description","category_id","document_multiplicity"]},
+      status:{enum:["recognized","uncertain","absent"]},
+      observation:{type:"string",maxLength:240}
+    }
+  }}}
+};
+
 const journeyFormSchema = z.object({
   candidates: z.array(z.object({
     field: z.string().min(1),
@@ -338,6 +398,10 @@ export const structuredContracts: Record<string, StructuredContract> = {
       },
     },
   },
+  "finance.count.regions.extract": { id:"finance.count.regions.extract.v1", schema:financeCountFieldsSchema, jsonSchema:financeCountFieldsJsonSchema },
+  "finance.count.freeform.extract": { id:"finance.count.freeform.extract.v1", schema:financeCountFieldsSchema, jsonSchema:financeCountFieldsJsonSchema },
+  "finance.count.denominations.extract": { id:"finance.count.denominations.extract.v1", schema:financeDenominationFieldsSchema, jsonSchema:financeDenominationFieldsJsonSchema },
+  "finance.document.transaction.extract": { id:"finance.document.transaction.extract.v1", schema:financeDocumentFieldsSchema, jsonSchema:financeDocumentFieldsJsonSchema },
   "finance.receipt.extract": {
     id: "finance.receipt.v1",
     schema: receiptSchema,
