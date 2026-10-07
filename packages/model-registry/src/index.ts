@@ -159,6 +159,7 @@ export const models = {
     freeEligible: true,
     paidRequired: false,
     embedding: true,
+    embeddingDimensions: 1024,
     productionTrafficAllowed: false,
     customerTrafficAllowed: false,
     commercialUse: "review_required",
@@ -255,7 +256,7 @@ export const models = {
   },
   "local-webgpu:multilingual-classifier": {
     provider: "local-webgpu",
-    providerModelId: "Xenova/distilbert-base-multilingual-cased",
+    providerModelId: "transformers-js:adapter-managed",
     status: "preview",
     promotionStage: "candidate",
     freeEligible: true,
