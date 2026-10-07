@@ -41,7 +41,7 @@ import { CircuitBreaker, executeWithSafeFallback } from "../../../packages/resil
 import type { Locale } from "../../../packages/i18n/src/index.js";
 import { cacheGet, cachePut, type KvNamespaceLike } from "../../../packages/cache/src/index.js";
 import { createJob, enqueueJob, getJobForScope, getJobResult, nextAttempt, putJobResult, retryDelaySeconds, updateJobStatus, type JobEnvelope, type QueueLike } from "../../../packages/jobs/src/index.js";
-import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit, controlPlaneRoutes, controlPlanePrompts, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota, syncStaticControlPlane, recordEvaluationProbe } from "../../../packages/control-plane/src/index.js";
+import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlaneAudit, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota, syncStaticControlPlane, recordEvaluationProbe, createControlPlaneDraft, promoteControlPlaneDraft, recordPromptDraftEvaluation, getPromptDraftInstructions, getActivePromptOverride, applyActiveRoutePreference, applyActivePolicyOverlay, controlPlanePromptsResolved, controlPlaneRoutesResolved, controlPlanePoliciesResolved } from "../../../packages/control-plane/src/index.js";
 import { validateAppManifest, assertManifestTaskOwnership, persistAppManifest } from "../../../packages/app-manifest/src/index.js";
 import { verifyGitHubWorkloadToken } from "../../../packages/workload-auth/src/index.js";
 import { queryKnowledge, upsertKnowledge, persistKnowledgeSource, ragOrganizationHash, ragScopedSourceId, applyRerankResults, type VectorizeLike, type RetrievedEvidence } from "../../../packages/rag/src/index.js";
@@ -611,13 +611,27 @@ async function prepareTaskExecution(
   };
 }
 
+async function buildResolvedTaskPrompt(
+  env: Env,
+  args: Parameters<typeof buildTaskPrompt>[0],
+): Promise<ReturnType<typeof buildTaskPrompt>> {
+  const override = await getActivePromptOverride(env.DB, args.taskId);
+  return buildTaskPrompt({
+    ...args,
+    ...(override ? {
+      instructionsOverride: override.instructions,
+      promptVersionOverride: override.version,
+    } : {}),
+  });
+}
+
 async function safeCandidates(
   env: Env,
   prepared: PreparedTaskExecution,
   modality: TaskDefinition["modality"],
   needsStructuredOutput = false,
 ): Promise<RouteDecision[]> {
-  const candidates = routeCandidates({
+  let candidates = routeCandidates({
     sensitivity: prepared.sensitivity,
     billingMode: env.AI_BILLING_MODE,
     modality,
@@ -626,6 +640,8 @@ async function safeCandidates(
     availableProviders: availableProviders(env),
     needsStructuredOutput,
   });
+  candidates = await applyActivePolicyOverlay(env.DB, candidates);
+  candidates = await applyActiveRoutePreference(env.DB, prepared.task.id, candidates);
   if (candidates.length === 0) throw new Error("ROUTER_NO_ELIGIBLE_MODEL");
   return quotaEligibleCandidates(env, prepared.claims, prepared.task, prepared.organizationId, candidates);
 }
@@ -675,7 +691,7 @@ async function executeJobEnvelope(env: Env, job: JobEnvelope): Promise<unknown> 
     assertGroundedEvidenceInput(task.id, job.payload);
     const structured = getStructuredContract(task.id);
     const candidates = await safeCandidates(env, prepared, "text", structured !== null);
-    const prompt = buildTaskPrompt({ taskId: task.id, locale: job.locale, input: job.payload });
+    const prompt = await buildResolvedTaskPrompt(env, { taskId: task.id, locale: job.locale, input: job.payload });
     const execution = await executeWithSafeFallback({
       candidates,
       keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
@@ -766,7 +782,7 @@ async function executeJobEnvelope(env: Env, job: JobEnvelope): Promise<unknown> 
         }))];
     const structured = getStructuredContract(task.id);
     const candidates = await safeCandidates(env, prepared, "text", structured !== null);
-    const prompt = buildTaskPrompt({
+    const prompt = await buildResolvedTaskPrompt(env, {
       taskId: task.id,
       locale: job.locale,
       input: {
@@ -982,18 +998,188 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       if (url.pathname === "/v1/admin/apps") return json({ apps: controlPlaneApps() });
       if (url.pathname === "/v1/admin/tasks") return json({ tasks: controlPlaneTasks() });
       if (url.pathname === "/v1/admin/providers") return json({ providers: controlPlaneProviders() });
-      if (url.pathname === "/v1/admin/routes") return json({ routes: controlPlaneRoutes() });
-      if (url.pathname === "/v1/admin/prompts") return json({ prompts: controlPlanePrompts() });
+      if (url.pathname === "/v1/admin/routes") return json({ routes: await controlPlaneRoutesResolved(env.DB) });
+      if (url.pathname === "/v1/admin/prompts") return json({ prompts: await controlPlanePromptsResolved(env.DB) });
       if (url.pathname === "/v1/admin/knowledge") return json(await controlPlaneKnowledge(env.DB));
       if (url.pathname === "/v1/admin/evals") return json(await controlPlaneEvaluations(env.DB));
       if (url.pathname === "/v1/admin/observability") return json(await controlPlaneObservability(env.DB));
       if (url.pathname === "/v1/admin/cost") return json(await controlPlaneCostQuota(env.DB));
-      if (url.pathname === "/v1/admin/policies") return json({ policies: controlPlanePolicies() });
+      if (url.pathname === "/v1/admin/policies") return json({ policies: await controlPlanePoliciesResolved(env.DB) });
       if (url.pathname === "/v1/admin/audit") return json({ events: await controlPlaneAudit(env.DB, Number(url.searchParams.get("limit") ?? 100)) });
       return json({ error: "NOT_FOUND" }, 404);
     } catch (error) {
       const code = errorCode(error);
       return json({ error: code }, statusFor(code));
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/admin/config/drafts") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    try {
+      const claims = await authenticateAdminRequest(request, env);
+      const body = await request.json() as { resource?: string; id?: string; config?: unknown };
+      const resource = String(body.resource ?? "");
+      const id = String(body.id ?? "");
+      let result;
+      if (resource === "prompt") {
+        result = await createControlPlaneDraft(env.DB, {
+          resource: "prompt",
+          id,
+          config: (body.config ?? {}) as { instructions: Partial<Record<"pt-BR" | "en" | "es", string>> },
+          actorId: claims.sub,
+        });
+      } else if (resource === "route") {
+        result = await createControlPlaneDraft(env.DB, {
+          resource: "route",
+          id,
+          config: (body.config ?? {}) as { providerOrder: string[] },
+          actorId: claims.sub,
+        });
+      } else if (resource === "policy" && id === "core") {
+        result = await createControlPlaneDraft(env.DB, {
+          resource: "policy",
+          id: "core",
+          config: (body.config ?? {}) as { extraBlockedProviders: string[] },
+          actorId: claims.sub,
+        });
+      } else {
+        throw new Error("CONTROL_PLANE_RESOURCE_INVALID");
+      }
+      return json({ requestId, ...result }, 201);
+    } catch (error) {
+      const code = errorCode(error);
+      return json({ requestId, error: code }, code.startsWith("CONTROL_PLANE_") ? 422 : statusFor(code));
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/admin/config/promote") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    try {
+      const claims = await authenticateAdminRequest(request, env);
+      const body = await request.json() as { resource?: "prompt" | "route" | "policy"; id?: string; version?: number };
+      if (!body.resource || !body.id || !Number.isInteger(body.version)) throw new Error("CONTROL_PLANE_PROMOTION_INVALID");
+      const result = await promoteControlPlaneDraft(env.DB, {
+        resource: body.resource,
+        id: body.id,
+        version: Number(body.version),
+        actorId: claims.sub,
+      });
+      return json({ requestId, ...result });
+    } catch (error) {
+      const code = errorCode(error);
+      return json({ requestId, error: code }, code.startsWith("CONTROL_PLANE_") ? 422 : statusFor(code));
+    }
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/admin/prompts/evaluate") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    const started = Date.now();
+    let promptId = "";
+    let version = 0;
+    let actorId = "";
+    try {
+      const claims = await authenticateAdminRequest(request, env);
+      actorId = claims.sub;
+      const body = await request.json() as {
+        promptId?: string;
+        version?: number;
+        locale?: Locale;
+        input?: unknown;
+        sanitized?: boolean;
+        sensitivity?: "P0_PUBLIC" | "P1_INTERNAL";
+      };
+      promptId = String(body.promptId ?? "");
+      version = Number(body.version ?? 0);
+      if (!body.sanitized) throw new Error("CONTROL_PLANE_PROMPT_EVAL_SANITIZED_REQUIRED");
+      if (body.sensitivity !== "P0_PUBLIC" && body.sensitivity !== "P1_INTERNAL") {
+        throw new Error("CONTROL_PLANE_PROMPT_EVAL_SENSITIVITY_DENIED");
+      }
+      const locale = body.locale === "en" || body.locale === "es" ? body.locale : "pt-BR";
+      const task = getTask(promptId);
+      if (task.modality !== "text") throw new Error("CONTROL_PLANE_PROMPT_EVAL_TEXT_ONLY");
+      const instructions = await getPromptDraftInstructions(env.DB, promptId, version);
+      const privacy = classifyPrivacy(body.input, body.sensitivity);
+      if (!privacy.externalAllowed) throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
+
+      const parsed = TaskRequest.parse({
+        task: task.id,
+        input: body.input ?? "Synthetic evaluation input.",
+        context: { organizationId: "global", locale },
+      });
+      const prepared: PreparedTaskExecution = {
+        parsed,
+        task,
+        organizationId: "global",
+        claims,
+        sensitivity: body.sensitivity,
+        locale,
+      };
+      const structured = getStructuredContract(task.id);
+      const candidates = await safeCandidates(env, prepared, "text", structured !== null);
+      const prompt = buildTaskPrompt({
+        taskId: task.id,
+        locale,
+        input: body.input ?? "Synthetic evaluation input.",
+        instructionsOverride: instructions,
+        promptVersionOverride: version,
+      });
+      const execution = await executeWithSafeFallback({
+        candidates,
+        keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
+        breaker,
+        maxRetriesPerCandidate: 1,
+        execute: async ({ candidate }) => {
+          await recordProviderAttempt(env, claims, task, "global", candidate.provider);
+          return withTimeout(
+            (signal) => generateForRoute(env, {
+              route: candidate,
+              messages: prompt.messages,
+              maxTokens: task.maxOutputTokens,
+              signal,
+            }),
+            task.timeoutMs,
+          );
+        },
+      });
+      const validated = validateStructuredText(task.id, execution.result.text);
+      const latencyMs = Date.now() - started;
+      const runId = await recordPromptDraftEvaluation(env.DB, {
+        promptId,
+        version,
+        passed: true,
+        latencyMs,
+        actorId,
+        report: {
+          sanitized: true,
+          sensitivity: body.sensitivity,
+          provider: execution.result.provider,
+          model: execution.result.model,
+          structured: structured !== null,
+          outputStored: false,
+        },
+      });
+      return json({
+        requestId,
+        runId,
+        promptId,
+        version,
+        latencyMs,
+        result: validated,
+        meta: { providerClass: "free", fallbackUsed: execution.fallbackUsed, retries: execution.retries },
+      });
+    } catch (error) {
+      const code = errorCode(error);
+      if (actorId && promptId && Number.isInteger(version) && version > 0) {
+        await recordPromptDraftEvaluation(env.DB, {
+          promptId,
+          version,
+          passed: false,
+          latencyMs: Date.now() - started,
+          actorId,
+          report: { errorCode: code, outputStored: false },
+        }).catch(() => undefined);
+      }
+      return json({ requestId, error: code }, code.startsWith("CONTROL_PLANE_") ? 422 : statusFor(code));
     }
   }
 
@@ -1319,7 +1505,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         locale: input.context.locale,
       };
       const candidates = await safeCandidates(env, prepared, "text");
-      const prompt = buildTaskPrompt({
+      const prompt = await buildResolvedTaskPrompt(env, {
         taskId: task.id,
         locale: input.context.locale,
         input: input.query,
@@ -1579,7 +1765,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
       const structured = getStructuredContract(prepared.task.id);
       const textCandidates = await safeCandidates(env, prepared, "text", structured !== null);
-      const prompt = buildTaskPrompt({
+      const prompt = await buildResolvedTaskPrompt(env, {
         taskId: prepared.task.id,
         locale: prepared.locale,
         input: {
@@ -1791,7 +1977,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
       const quotaCandidates = await quotaEligibleCandidates(env, claims, task, organizationId, candidates);
       const locale = (parsed.context.locale ?? claims.locale ?? "pt-BR") as Locale;
-      const prompt = buildTaskPrompt({ taskId: task.id, locale, input: parsed.input });
+      const prompt = await buildResolvedTaskPrompt(env, { taskId: task.id, locale, input: parsed.input });
 
       const execution = await executeWithSafeFallback({
         candidates: quotaCandidates,
@@ -1929,7 +2115,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     assertGroundedEvidenceInput(task.id, parsed.input);
     const structuredContract = getStructuredContract(task.id);
     const locale = (parsed.context.locale ?? claims.locale ?? "pt-BR") as Locale;
-    const prompt = buildTaskPrompt({ taskId: task.id, locale, input: parsed.input });
+    const prompt = await buildResolvedTaskPrompt(env, { taskId: task.id, locale, input: parsed.input });
     const cacheContext = {
       taskId: task.id,
       taskVersion: task.version,

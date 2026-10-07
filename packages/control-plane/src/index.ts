@@ -266,7 +266,7 @@ export async function syncStaticControlPlane(
   for(const route of routes){
     await db.prepare(
       "INSERT INTO cp_routes(route_id,task_id,current_version,status,updated_at) VALUES (?1,?2,?3,'production',?4) " +
-      "ON CONFLICT(route_id) DO UPDATE SET task_id=excluded.task_id,current_version=excluded.current_version,status='production',updated_at=excluded.updated_at"
+      "ON CONFLICT(route_id) DO UPDATE SET task_id=excluded.task_id,updated_at=excluded.updated_at"
     ).bind(route.id,route.task,route.version,timestamp).run();
     await db.prepare(
       "INSERT OR IGNORE INTO cp_route_versions(route_id,version,config_json,created_at) VALUES (?1,?2,?3,?4)"
@@ -276,7 +276,7 @@ export async function syncStaticControlPlane(
   for(const prompt of Object.values(prompts)){
     await db.prepare(
       "INSERT INTO cp_prompts(prompt_id,task_id,current_version,status,updated_at) VALUES (?1,?2,?3,'production',?4) " +
-      "ON CONFLICT(prompt_id) DO UPDATE SET task_id=excluded.task_id,current_version=excluded.current_version,status='production',updated_at=excluded.updated_at"
+      "ON CONFLICT(prompt_id) DO UPDATE SET task_id=excluded.task_id,updated_at=excluded.updated_at"
     ).bind(prompt.id,prompt.taskId,prompt.version,timestamp).run();
     await db.prepare(
       "INSERT OR IGNORE INTO cp_prompt_versions(prompt_id,version,content_json,created_at) VALUES (?1,?2,?3,?4)"
@@ -286,7 +286,7 @@ export async function syncStaticControlPlane(
   const policy=controlPlanePolicies();
   await db.prepare(
     "INSERT INTO cp_policies(policy_id,current_version,status,updated_at) VALUES ('core',1,'production',?1) " +
-    "ON CONFLICT(policy_id) DO UPDATE SET current_version=1,status='production',updated_at=excluded.updated_at"
+    "ON CONFLICT(policy_id) DO UPDATE SET updated_at=excluded.updated_at"
   ).bind(timestamp).run();
   await db.prepare(
     "INSERT OR IGNORE INTO cp_policy_versions(policy_id,version,config_json,created_at) VALUES ('core',1,?1,?2)"
@@ -352,4 +352,349 @@ export async function recordEvaluationProbe(
     now.toISOString(),
   ).run();
   return runId;
+}
+
+
+export type DynamicPromptDraft = {
+  instructions: Partial<Record<"pt-BR" | "en" | "es", string>>;
+};
+
+export type DynamicRouteDraft = {
+  providerOrder: string[];
+};
+
+export type DynamicPolicyDraft = {
+  extraBlockedProviders: string[];
+};
+
+type VersionedResource = "prompt" | "route" | "policy";
+
+async function actorHash(actorId: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(actorId));
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("").slice(0, 24);
+}
+
+async function appendControlPlaneAudit(
+  db: D1DatabaseLike,
+  args: { actorId: string; action: string; resourceType: string; resourceId: string; metadata?: Record<string, unknown> },
+  now = new Date(),
+): Promise<void> {
+  await db.prepare(
+    "INSERT INTO cp_audit_events(event_id,actor_hash,action,resource_type,resource_id,environment,metadata_json,created_at) VALUES (?1,?2,?3,?4,?5,'production',?6,?7)"
+  ).bind(
+    crypto.randomUUID(),
+    await actorHash(args.actorId),
+    args.action,
+    args.resourceType,
+    args.resourceId,
+    JSON.stringify(args.metadata ?? {}),
+    now.toISOString(),
+  ).run();
+}
+
+function assertInstructionText(value: unknown): asserts value is string {
+  if (typeof value !== "string" || value.trim().length < 3 || value.length > 6000) {
+    throw new Error("CONTROL_PLANE_PROMPT_INVALID");
+  }
+}
+
+export function validatePromptDraft(promptId: string, draft: DynamicPromptDraft): DynamicPromptDraft {
+  const base = prompts[promptId];
+  if (!base) throw new Error("CONTROL_PLANE_PROMPT_NOT_FOUND");
+  const allowed = new Set(["pt-BR", "en", "es"]);
+  const entries = Object.entries(draft.instructions ?? {});
+  if (entries.length === 0) throw new Error("CONTROL_PLANE_PROMPT_EMPTY");
+  for (const [locale, value] of entries) {
+    if (!allowed.has(locale)) throw new Error("CONTROL_PLANE_PROMPT_LOCALE_INVALID");
+    assertInstructionText(value);
+  }
+  return { instructions: Object.fromEntries(entries.map(([locale, value]) => [locale, String(value).trim()])) };
+}
+
+export function validateRouteDraft(taskId: string, draft: DynamicRouteDraft): DynamicRouteDraft {
+  const task = tasks.find((item) => item.id === taskId);
+  if (!task) throw new Error("CONTROL_PLANE_ROUTE_NOT_FOUND");
+  const providerOrder = [...new Set((draft.providerOrder ?? []).map(String))];
+  if (providerOrder.length === 0) throw new Error("CONTROL_PLANE_ROUTE_EMPTY");
+  for (const provider of providerOrder) {
+    if (!task.allowedProviders.includes(provider) || task.blockedProviders.includes(provider)) {
+      throw new Error("CONTROL_PLANE_ROUTE_PROVIDER_DENIED");
+    }
+  }
+  return { providerOrder };
+}
+
+export function validatePolicyDraft(draft: DynamicPolicyDraft): DynamicPolicyDraft {
+  const known = new Set(Object.keys(providers));
+  const extraBlockedProviders = [...new Set((draft.extraBlockedProviders ?? []).map(String))];
+  for (const provider of extraBlockedProviders) {
+    if (!known.has(provider)) throw new Error("CONTROL_PLANE_POLICY_PROVIDER_INVALID");
+  }
+  return { extraBlockedProviders };
+}
+
+async function nextVersion(
+  db: D1DatabaseLike,
+  table: "cp_prompt_versions" | "cp_route_versions" | "cp_policy_versions",
+  idColumn: "prompt_id" | "route_id" | "policy_id",
+  id: string,
+): Promise<number> {
+  const row = await db.prepare(
+    `SELECT COALESCE(MAX(version),0) AS version FROM ${table} WHERE ${idColumn}=?1`
+  ).bind(id).first<{ version: number }>();
+  return Math.max(1000, Number(row?.version ?? 0) + 1);
+}
+
+export async function createControlPlaneDraft(
+  db: D1DatabaseLike,
+  args:
+    | { resource: "prompt"; id: string; config: DynamicPromptDraft; actorId: string }
+    | { resource: "route"; id: string; config: DynamicRouteDraft; actorId: string }
+    | { resource: "policy"; id: "core"; config: DynamicPolicyDraft; actorId: string },
+  now = new Date(),
+): Promise<{ resource: VersionedResource; id: string; version: number; config: unknown }> {
+  if (args.resource === "prompt") {
+    const config = validatePromptDraft(args.id, args.config);
+    const version = await nextVersion(db, "cp_prompt_versions", "prompt_id", args.id);
+    await db.prepare(
+      "INSERT INTO cp_prompt_versions(prompt_id,version,content_json,created_at) VALUES (?1,?2,?3,?4)"
+    ).bind(args.id, version, JSON.stringify(config), now.toISOString()).run();
+    await appendControlPlaneAudit(db, { actorId: args.actorId, action: "draft.create", resourceType: "prompt", resourceId: args.id, metadata: { version } }, now);
+    return { resource: args.resource, id: args.id, version, config };
+  }
+  if (args.resource === "route") {
+    const config = validateRouteDraft(args.id, args.config);
+    const version = await nextVersion(db, "cp_route_versions", "route_id", args.id + ":route");
+    await db.prepare(
+      "INSERT INTO cp_route_versions(route_id,version,config_json,created_at) VALUES (?1,?2,?3,?4)"
+    ).bind(args.id + ":route", version, JSON.stringify(config), now.toISOString()).run();
+    await appendControlPlaneAudit(db, { actorId: args.actorId, action: "draft.create", resourceType: "route", resourceId: args.id, metadata: { version } }, now);
+    return { resource: args.resource, id: args.id, version, config };
+  }
+  if (args.id !== "core") throw new Error("CONTROL_PLANE_POLICY_NOT_FOUND");
+  const config = validatePolicyDraft(args.config);
+  const version = await nextVersion(db, "cp_policy_versions", "policy_id", "core");
+  await db.prepare(
+    "INSERT INTO cp_policy_versions(policy_id,version,config_json,created_at) VALUES ('core',?1,?2,?3)"
+  ).bind(version, JSON.stringify(config), now.toISOString()).run();
+  await appendControlPlaneAudit(db, { actorId: args.actorId, action: "draft.create", resourceType: "policy", resourceId: "core", metadata: { version } }, now);
+  return { resource: args.resource, id: "core", version, config };
+}
+
+async function assertPromptEvalPassed(db: D1DatabaseLike, promptId: string, version: number): Promise<void> {
+  const suiteId = "prompt:" + promptId + ":v" + version;
+  const row = await db.prepare(
+    "SELECT passed FROM cp_eval_runs WHERE suite_id=?1 ORDER BY created_at DESC LIMIT 1"
+  ).bind(suiteId).first<{ passed: number }>();
+  if (Number(row?.passed ?? 0) !== 1) throw new Error("CONTROL_PLANE_PROMPT_EVAL_REQUIRED");
+}
+
+export async function promoteControlPlaneDraft(
+  db: D1DatabaseLike,
+  args: { resource: VersionedResource; id: string; version: number; actorId: string },
+  now = new Date(),
+): Promise<{ resource: VersionedResource; id: string; version: number; status: "production" }> {
+  if (!Number.isInteger(args.version) || args.version < 1) throw new Error("CONTROL_PLANE_VERSION_INVALID");
+  if (args.resource === "prompt") {
+    const row = await db.prepare("SELECT content_json FROM cp_prompt_versions WHERE prompt_id=?1 AND version=?2")
+      .bind(args.id,args.version).first<{ content_json: string }>();
+    if (!row) throw new Error("CONTROL_PLANE_DRAFT_NOT_FOUND");
+    validatePromptDraft(args.id, JSON.parse(row.content_json) as DynamicPromptDraft);
+    await assertPromptEvalPassed(db, args.id, args.version);
+    await db.prepare(
+      "UPDATE cp_prompts SET current_version=?1,status='production',updated_at=?2 WHERE prompt_id=?3"
+    ).bind(args.version,now.toISOString(),args.id).run();
+  } else if (args.resource === "route") {
+    const routeId = args.id + ":route";
+    const row = await db.prepare("SELECT config_json FROM cp_route_versions WHERE route_id=?1 AND version=?2")
+      .bind(routeId,args.version).first<{ config_json: string }>();
+    if (!row) throw new Error("CONTROL_PLANE_DRAFT_NOT_FOUND");
+    validateRouteDraft(args.id, JSON.parse(row.config_json) as DynamicRouteDraft);
+    await db.prepare(
+      "UPDATE cp_routes SET current_version=?1,status='production',updated_at=?2 WHERE route_id=?3"
+    ).bind(args.version,now.toISOString(),routeId).run();
+  } else {
+    if (args.id !== "core") throw new Error("CONTROL_PLANE_POLICY_NOT_FOUND");
+    const row = await db.prepare("SELECT config_json FROM cp_policy_versions WHERE policy_id='core' AND version=?1")
+      .bind(args.version).first<{ config_json: string }>();
+    if (!row) throw new Error("CONTROL_PLANE_DRAFT_NOT_FOUND");
+    validatePolicyDraft(JSON.parse(row.config_json) as DynamicPolicyDraft);
+    await db.prepare(
+      "UPDATE cp_policies SET current_version=?1,status='production',updated_at=?2 WHERE policy_id='core'"
+    ).bind(args.version,now.toISOString()).run();
+  }
+  await appendControlPlaneAudit(db, { actorId: args.actorId, action: "draft.promote", resourceType: args.resource, resourceId: args.id, metadata: { version: args.version } }, now);
+  return { resource: args.resource, id: args.id, version: args.version, status: "production" };
+}
+
+export async function recordPromptDraftEvaluation(
+  db: D1DatabaseLike,
+  args: { promptId: string; version: number; passed: boolean; latencyMs: number; actorId: string; report: Record<string, unknown> },
+  now = new Date(),
+): Promise<string> {
+  const suiteId = "prompt:" + args.promptId + ":v" + args.version;
+  const runId = crypto.randomUUID();
+  await db.prepare(
+    "INSERT INTO cp_eval_suites(suite_id,task_id,name,status,updated_at) VALUES (?1,?2,?3,'active',?4) ON CONFLICT(suite_id) DO UPDATE SET status='active',updated_at=excluded.updated_at"
+  ).bind(suiteId,args.promptId,"Prompt draft evaluation — "+args.promptId+" v"+args.version,now.toISOString()).run();
+  await db.prepare(
+    "INSERT INTO cp_eval_runs(run_id,suite_id,target_json,score,passed,report_json,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)"
+  ).bind(runId,suiteId,JSON.stringify({ promptId: args.promptId, version: args.version }),args.passed?1:0,args.passed?1:0,JSON.stringify({ latencyMs: args.latencyMs, ...args.report }),now.toISOString()).run();
+  await appendControlPlaneAudit(db, { actorId: args.actorId, action: "draft.evaluate", resourceType: "prompt", resourceId: args.promptId, metadata: { version: args.version, passed: args.passed, runId } }, now);
+  return runId;
+}
+
+export async function getActivePromptInstructions(
+  db: D1DatabaseLike,
+  promptId: string,
+): Promise<DynamicPromptDraft["instructions"] | null> {
+  const row = await db.prepare(
+    "SELECT v.content_json AS content_json FROM cp_prompts p JOIN cp_prompt_versions v ON v.prompt_id=p.prompt_id AND v.version=p.current_version WHERE p.prompt_id=?1 AND p.status='production'"
+  ).bind(promptId).first<{ content_json: string }>();
+  if (!row) return null;
+  try {
+    const parsed = JSON.parse(row.content_json) as Record<string, unknown>;
+    if (!("instructions" in parsed)) return null;
+    return validatePromptDraft(promptId, parsed as DynamicPromptDraft).instructions;
+  } catch {
+    return null;
+  }
+}
+
+export async function applyActiveRoutePreference<T extends { provider: string }>(
+  db: D1DatabaseLike,
+  taskId: string,
+  candidates: T[],
+): Promise<T[]> {
+  const row = await db.prepare(
+    "SELECT v.config_json AS config_json FROM cp_routes r JOIN cp_route_versions v ON v.route_id=r.route_id AND v.version=r.current_version WHERE r.route_id=?1 AND r.status='production'"
+  ).bind(taskId + ":route").first<{ config_json: string }>();
+  if (!row) return candidates;
+  try {
+    const config = validateRouteDraft(taskId, JSON.parse(row.config_json) as DynamicRouteDraft);
+    const rank = new Map(config.providerOrder.map((provider,index)=>[provider,index]));
+    return [...candidates].sort((a,b)=>(rank.get(a.provider)??999)-(rank.get(b.provider)??999));
+  } catch {
+    return candidates;
+  }
+}
+
+export async function applyActivePolicyOverlay<T extends { provider: string }>(
+  db: D1DatabaseLike,
+  candidates: T[],
+): Promise<T[]> {
+  const row = await db.prepare(
+    "SELECT v.config_json AS config_json FROM cp_policies p JOIN cp_policy_versions v ON v.policy_id=p.policy_id AND v.version=p.current_version WHERE p.policy_id='core' AND p.status='production'"
+  ).first<{ config_json: string }>();
+  if (!row) return candidates;
+  try {
+    const config = validatePolicyDraft(JSON.parse(row.config_json) as DynamicPolicyDraft);
+    const blocked = new Set(config.extraBlockedProviders);
+    return candidates.filter((candidate)=>!blocked.has(candidate.provider));
+  } catch {
+    return candidates;
+  }
+}
+
+
+export async function getPromptDraftInstructions(
+  db: D1DatabaseLike,
+  promptId: string,
+  version: number,
+): Promise<DynamicPromptDraft["instructions"]> {
+  const row = await db.prepare(
+    "SELECT content_json FROM cp_prompt_versions WHERE prompt_id=?1 AND version=?2"
+  ).bind(promptId,version).first<{ content_json: string }>();
+  if (!row) throw new Error("CONTROL_PLANE_DRAFT_NOT_FOUND");
+  return validatePromptDraft(promptId, JSON.parse(row.content_json) as DynamicPromptDraft).instructions;
+}
+
+
+export async function getActivePromptOverride(
+  db: D1DatabaseLike,
+  promptId: string,
+): Promise<{ instructions: DynamicPromptDraft["instructions"]; version: number } | null> {
+  const row = await db.prepare(
+    "SELECT p.current_version AS version,v.content_json AS content_json FROM cp_prompts p JOIN cp_prompt_versions v ON v.prompt_id=p.prompt_id AND v.version=p.current_version WHERE p.prompt_id=?1 AND p.status='production'"
+  ).bind(promptId).first<{ version: number; content_json: string }>();
+  if (!row) return null;
+  try {
+    const parsed = JSON.parse(row.content_json) as Record<string, unknown>;
+    if (!("instructions" in parsed)) return null;
+    return {
+      instructions: validatePromptDraft(promptId, parsed as DynamicPromptDraft).instructions,
+      version: Number(row.version),
+    };
+  } catch {
+    return null;
+  }
+}
+
+
+export async function controlPlanePromptsResolved(db: D1DatabaseLike) {
+  const base = controlPlanePrompts();
+  const rows = await db.prepare(
+    "SELECT p.prompt_id,p.current_version,v.content_json FROM cp_prompts p JOIN cp_prompt_versions v ON v.prompt_id=p.prompt_id AND v.version=p.current_version"
+  ).all<{ prompt_id: string; current_version: number; content_json: string }>();
+  const active = new Map((rows.results ?? []).map((row)=>[row.prompt_id,row]));
+  return base.map((prompt)=>{
+    const row = active.get(prompt.id);
+    if (!row) return { ...prompt, instructions: prompts[prompt.id]?.instructions ?? {}, currentVersion: prompt.version };
+    let instructions = prompts[prompt.id]?.instructions ?? {};
+    try {
+      const parsed = JSON.parse(row.content_json) as Record<string, unknown>;
+      if ("instructions" in parsed) {
+        instructions = {
+          ...instructions,
+          ...validatePromptDraft(prompt.id, parsed as DynamicPromptDraft).instructions,
+        };
+      }
+    } catch {
+      // Fail closed to the static prompt if a persisted override is malformed.
+    }
+    return { ...prompt, version: Number(row.current_version), currentVersion: Number(row.current_version), instructions };
+  });
+}
+
+export async function controlPlaneRoutesResolved(db: D1DatabaseLike) {
+  const base = controlPlaneRoutes();
+  const rows = await db.prepare(
+    "SELECT r.route_id,r.current_version,v.config_json FROM cp_routes r JOIN cp_route_versions v ON v.route_id=r.route_id AND v.version=r.current_version"
+  ).all<{ route_id: string; current_version: number; config_json: string }>();
+  const active = new Map((rows.results ?? []).map((row)=>[row.route_id,row]));
+  return base.map((route)=>{
+    const row = active.get(route.id);
+    if (!row) return { ...route, currentVersion: route.version, providerOrder: route.candidates.map((candidate)=>candidate.provider) };
+    let providerOrder: string[] = route.candidates.map((candidate)=>candidate.provider);
+    try {
+      const parsed = JSON.parse(row.config_json) as Record<string, unknown>;
+      if ("providerOrder" in parsed) providerOrder = validateRouteDraft(route.task, parsed as DynamicRouteDraft).providerOrder;
+    } catch {
+      // Preserve deterministic static order on malformed persisted state.
+    }
+    return { ...route, version: Number(row.current_version), currentVersion: Number(row.current_version), providerOrder };
+  });
+}
+
+export async function controlPlanePoliciesResolved(db: D1DatabaseLike) {
+  const base = controlPlanePolicies();
+  const row = await db.prepare(
+    "SELECT p.current_version,v.config_json FROM cp_policies p JOIN cp_policy_versions v ON v.policy_id=p.policy_id AND v.version=p.current_version WHERE p.policy_id='core'"
+  ).first<{ current_version: number; config_json: string }>();
+  let extraBlockedProviders: string[] = [];
+  if (row) {
+    try {
+      const parsed = JSON.parse(row.config_json) as Record<string, unknown>;
+      if ("extraBlockedProviders" in parsed) {
+        extraBlockedProviders = validatePolicyDraft(parsed as DynamicPolicyDraft).extraBlockedProviders;
+      }
+    } catch {
+      extraBlockedProviders = [];
+    }
+  }
+  return {
+    ...base,
+    currentVersion: Number(row?.current_version ?? 1),
+    extraBlockedProviders,
+  };
 }
