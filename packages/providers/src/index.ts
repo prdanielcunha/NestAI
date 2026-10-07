@@ -230,6 +230,34 @@ export async function generateWithCloudflare(ai: WorkersAiBinding, request: Gene
   };
 }
 
+export async function classifyPromptGuardWithGroq(
+  apiKey: string,
+  text: string,
+  signal?: AbortSignal,
+): Promise<{ label: "LABEL_0" | "LABEL_1"; raw: string }> {
+  if (!apiKey) throw new Error("PROVIDER_GROQ_KEY_MISSING");
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: { authorization: "Bearer " + apiKey, "content-type": "application/json" },
+    ...(signal ? { signal } : {}),
+    body: JSON.stringify({
+      model: "meta-llama/llama-prompt-guard-2-86m",
+      messages: [{ role: "user", content: text }],
+      max_completion_tokens: 16,
+      temperature: 0,
+    }),
+  });
+  if (!response.ok) throw new Error("PROVIDER_GROQ_PROMPT_GUARD_HTTP_" + response.status);
+  const body = await response.json() as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const raw = String(body.choices?.[0]?.message?.content ?? "").trim();
+  const normalized = raw.toUpperCase();
+  if (/\bLABEL_1\b|\bMALICIOUS\b/.test(normalized)) return { label: "LABEL_1", raw };
+  if (/\bLABEL_0\b|\bBENIGN\b/.test(normalized)) return { label: "LABEL_0", raw };
+  throw new Error("PROVIDER_GROQ_PROMPT_GUARD_UNPARSABLE");
+}
+
 export async function generateWithGroq(apiKey: string, request: GenerateRequest): Promise<GenerateResult> {
   if (!apiKey) throw new Error("PROVIDER_GROQ_KEY_MISSING");
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -306,6 +334,46 @@ export async function generateWithGemini(apiKey: string, request: GenerateReques
     usage: {
       inputTokens: body.usageMetadata?.promptTokenCount,
       outputTokens: body.usageMetadata?.candidatesTokenCount,
+    },
+  };
+}
+
+export async function generateWithNvidiaEval(
+  apiKey: string,
+  request: GenerateRequest,
+): Promise<GenerateResult> {
+  if (!apiKey) throw new Error("PROVIDER_NVIDIA_KEY_MISSING");
+  if (request.route.provider !== "nvidia-nim") throw new Error("PROVIDER_NVIDIA_EVAL_ROUTE_REQUIRED");
+  const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      authorization: "Bearer " + apiKey,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    ...(request.signal ? { signal: request.signal } : {}),
+    body: JSON.stringify({
+      model: request.route.providerModelId,
+      messages: request.messages,
+      max_tokens: Math.min(request.maxTokens ?? 1024, 4096),
+      temperature: 0.2,
+      stream: false,
+    }),
+  });
+  if (!response.ok) throw new Error("PROVIDER_NVIDIA_HTTP_" + response.status);
+  const body = await response.json() as {
+    choices?: Array<{ message?: { content?: string } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  const text = body.choices?.[0]?.message?.content;
+  if (!text) throw new Error("PROVIDER_EMPTY_RESPONSE");
+  return {
+    text,
+    provider: "nvidia-nim",
+    model: request.route.providerModelId,
+    usage: {
+      inputTokens: body.usage?.prompt_tokens,
+      outputTokens: body.usage?.completion_tokens,
     },
   };
 }
@@ -588,6 +656,39 @@ export async function extractDocumentsTextWithCloudflare(
       ...(item.tokens!==undefined?{tokens:item.tokens}:{}),
     };
   });
+}
+
+export type RerankResult = {
+  index: number;
+  score: number;
+};
+
+export async function rerankWithCloudflare(
+  ai: WorkersAiBinding,
+  query: string,
+  contexts: string[],
+  topK?: number,
+): Promise<RerankResult[]> {
+  if (contexts.length === 0) return [];
+  const response = await ai.run(
+    "@cf/baai/bge-reranker-base",
+    {
+      query,
+      contexts: contexts.map((text) => ({ text })),
+      top_k: Math.min(contexts.length, Math.max(1, topK ?? contexts.length)),
+    },
+    { gateway: { id: "default", collectLog: false }, rejectIfBusy: true },
+  ) as {
+    response?: Array<{ id?: number; index?: number; score?: number }>;
+    result?: Array<{ id?: number; index?: number; score?: number }>;
+  };
+  const items = response.response ?? response.result ?? [];
+  const parsed = items.map((item, position) => ({
+    index: Number(item.index ?? item.id ?? position),
+    score: Number(item.score ?? 0),
+  })).filter((item) => Number.isInteger(item.index) && item.index >= 0 && Number.isFinite(item.score));
+  if (parsed.length === 0) throw new Error("PROVIDER_RERANK_EMPTY");
+  return parsed;
 }
 
 export async function embedWithCloudflare(
