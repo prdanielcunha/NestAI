@@ -14,6 +14,7 @@ export type RouteRequest = {
   needsReasoning?: boolean;
   needsStructuredOutput?: boolean;
   allowPreviewModels?: boolean;
+  executionMode?: "customer" | "eval" | "local";
 };
 
 export type RouteDecision = {
@@ -29,11 +30,14 @@ const preference: ModelId[] = [
   "groq:whisper-large-v3-turbo",
   "cloudflare:flux-1-schnell",
   "groq:gpt-oss-20b",
+  "groq:qwen3.8-27b",
   "cloudflare:glm-4.7-flash",
   "gemini:3.5-flash-lite",
   "groq:gpt-oss-120b",
   "cloudflare:nemotron-3-120b-a12b",
   "cloudflare:gemma-4-26b-a4b-it",
+  "nvidia-nim:gpt-oss-20b-eval",
+  "local-webgpu:multilingual-classifier",
 ];
 
 function supportsModality(model: ModelDescriptor, modality: RouteRequest["modality"]): boolean {
@@ -59,6 +63,17 @@ export function routeCandidates(request: RouteRequest): RouteDecision[] {
     if (request.needsStructuredOutput && model.structuredOutput !== true) continue;
     const provider = getProvider(model.provider);
     if (provider.status === "blocked") continue;
+    const executionMode = request.executionMode ?? "customer";
+    if (executionMode === "customer") {
+      if (provider.customerTrafficAllowed !== true || provider.productionTrafficAllowed !== true) continue;
+      if (model.customerTrafficAllowed === false || model.productionTrafficAllowed === false || model.evalOnly === true) continue;
+      if (provider.evalOnly) continue;
+    } else if (executionMode === "eval") {
+      if (model.provider === "local-webgpu") continue;
+      if (model.status === "preview" && request.allowPreviewModels !== true) continue;
+    } else if (executionMode === "local") {
+      if (model.provider !== "local-webgpu") continue;
+    }
     if (!providerAllowed({
       sensitivity: request.sensitivity,
       billingMode: request.billingMode,
