@@ -44,7 +44,7 @@ import { createJob, enqueueJob, getJobForScope, getJobResult, nextAttempt, putJo
 import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit, controlPlaneRoutes, controlPlanePrompts, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota, syncStaticControlPlane } from "../../../packages/control-plane/src/index.js";
 import { validateAppManifest, assertManifestTaskOwnership, persistAppManifest } from "../../../packages/app-manifest/src/index.js";
 import { verifyGitHubWorkloadToken } from "../../../packages/workload-auth/src/index.js";
-import { queryKnowledge, upsertKnowledge, persistKnowledgeSource, ragOrganizationHash, ragScopedSourceId, type VectorizeLike } from "../../../packages/rag/src/index.js";
+import { queryKnowledge, upsertKnowledge, persistKnowledgeSource, ragOrganizationHash, ragScopedSourceId, applyRerankResults, type VectorizeLike, type RetrievedEvidence } from "../../../packages/rag/src/index.js";
 import { getR2Usage, putR2Object, r2Utf8Size, reconcileR2Inventory, type R2BucketLike } from "../../../packages/r2-storage/src/index.js";
 
 type RateLimiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
@@ -1133,15 +1133,83 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       const [queryVector] = await embedWithCloudflare(env.AI, "@cf/google/embeddinggemma-300m", input.query);
       if (!queryVector) throw new Error("RAG_QUERY_EMBEDDING_EMPTY");
 
-      const evidence = await queryKnowledge({
+      const requestedTopK = Math.min(12, Math.max(1, input.topK ?? 6));
+      const initialTopK = Math.min(20, Math.max(requestedTopK, requestedTopK * 3));
+      const retrieved = await queryKnowledge({
         vectorize: env.VECTORIZE,
         appId: task.app,
         organizationId,
         maxSensitivity: task.defaultSensitivity,
         locale: input.context.locale,
         queryVector,
-        ...(input.topK !== undefined ? { topK: input.topK } : {}),
+        topK: initialTopK,
       });
+
+      const queryGuard = await runPromptGuard(env, input.query, {
+        untrustedExternalContent: false,
+        appId: task.app,
+        organizationId,
+        sensitivity: privacy.sensitivity,
+      });
+      assertPromptGuardPolicy(queryGuard, "user");
+
+      const guardedEvidence: RetrievedEvidence[] = [];
+      for (const item of retrieved) {
+        const evidenceGuard = await runPromptGuard(env, item.text, {
+          untrustedExternalContent: true,
+          appId: task.app,
+          organizationId,
+          sensitivity: item.sensitivity,
+        });
+        if (promptGuardPolicy({
+          verdict: evidenceGuard.verdict,
+          source: "retrieved",
+          criticalAction: false,
+        }) === "ALLOW") {
+          guardedEvidence.push(item);
+        } else {
+          await recordRuntimeEvent(env.DB, {
+            id: crypto.randomUUID(),
+            eventType: "rag_prompt_guard_quarantine",
+            appId: task.app,
+            task: task.id,
+          });
+        }
+      }
+
+      let evidence = guardedEvidence.slice(0, requestedTopK);
+      if (env.AI_RAG_RERANK_ENABLED === "true" && guardedEvidence.length > 1) {
+        try {
+          const reranked = await withTimeout(
+            () => rerankWithCloudflare(
+              env.AI,
+              input.query,
+              guardedEvidence.map((item) => item.text),
+              requestedTopK,
+            ),
+            5_000,
+          );
+          evidence = applyRerankResults(guardedEvidence, reranked, requestedTopK);
+          await recordRuntimeEvent(env.DB, {
+            id: crypto.randomUUID(),
+            eventType: "rag_rerank_used",
+            appId: task.app,
+            provider: "cloudflare",
+            task: task.id,
+          });
+        } catch {
+          evidence = guardedEvidence.slice(0, requestedTopK);
+          await recordRuntimeEvent(env.DB, {
+            id: crypto.randomUUID(),
+            eventType: "rag_rerank_fallback",
+            appId: task.app,
+            provider: "cloudflare",
+            task: task.id,
+          });
+        }
+      }
+
+      if (evidence.length === 0) throw new Error("RAG_EVIDENCE_UNAVAILABLE");
 
       const parsed = TaskRequest.parse({
         task: task.id,
