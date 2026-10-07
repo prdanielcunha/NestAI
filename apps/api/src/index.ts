@@ -416,6 +416,12 @@ async function recordProviderAttempt(
   ]);
 }
 
+function assertGuestSensitivity(claims: NestAiClaims, sensitivity: ReturnType<typeof classifyPrivacy>["sensitivity"]): void {
+  if (claims.tokenType === "guest" && sensitivity !== "P0_PUBLIC" && sensitivity !== "P1_INTERNAL") {
+    throw new Error("AUTH_GUEST_SENSITIVITY_DENIED");
+  }
+}
+
 type PreparedTaskExecution = {
   parsed: ReturnType<typeof TaskRequest.parse>;
   task: TaskDefinition;
@@ -447,6 +453,7 @@ async function prepareTaskExecution(
   }
 
   const privacy = classifyPrivacy(parsed.input, task.defaultSensitivity);
+  assertGuestSensitivity(claims, privacy.sensitivity);
   if (!privacy.externalAllowed) {
     await recordRuntimeEvent(env.DB, { id: crypto.randomUUID(), eventType: "privacy_rejected", appId: task.app, task: task.id });
     throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
@@ -889,6 +896,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       if (!rate.success) throw new Error("RATE_LIMITED");
 
       const privacy = classifyPrivacy(input.query, task.defaultSensitivity);
+      assertGuestSensitivity(claims, privacy.sensitivity);
       if (!privacy.externalAllowed) throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
 
       await recordProviderAttempt(env, claims, task, organizationId, "cloudflare");
@@ -1004,11 +1012,13 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       const organizationId = parsed.context.organizationId;
       if (!organizationId) throw new Error("AUTH_TENANT_REQUIRED");
       const claims = await authenticateRequest({ request, env, task, organizationId });
+      if (claims.tokenType === "guest") throw new Error("AUTH_GUEST_JOBS_DENIED");
 
       const rate = await env.AI_RATE_LIMITER.limit({ key: claims.organizationId + ":" + claims.sub });
       if (!rate.success) throw new Error("RATE_LIMITED");
 
       const privacy = classifyPrivacy(parsed.input, task.defaultSensitivity);
+  assertGuestSensitivity(claims, privacy.sensitivity);
       if (!privacy.externalAllowed) throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
 
       const serialized = JSON.stringify(parsed.input);
@@ -1349,6 +1359,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     }
 
       const privacy = classifyPrivacy(parsed.input, task.defaultSensitivity);
+  assertGuestSensitivity(claims, privacy.sensitivity);
       if (!privacy.externalAllowed) {
       await recordRuntimeEvent(env.DB, { id: crypto.randomUUID(), eventType: "privacy_rejected", appId: task.app, task: task.id });
       throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
@@ -1495,6 +1506,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     }
 
     const privacy = classifyPrivacy(parsed.input, task.defaultSensitivity);
+  assertGuestSensitivity(claims, privacy.sensitivity);
     if (!privacy.externalAllowed) {
       await recordRuntimeEvent(env.DB, { id: crypto.randomUUID(), eventType: "privacy_rejected", appId: task.app, task: task.id });
       throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
