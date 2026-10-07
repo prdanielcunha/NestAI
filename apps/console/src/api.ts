@@ -71,6 +71,8 @@ export type RouteRow = {
   id: string;
   task: string;
   version: number;
+  currentVersion?: number;
+  providerOrder?: string[];
   sensitivity: string;
   freeOnly: boolean;
   candidates: RouteCandidate[];
@@ -98,6 +100,8 @@ export type PromptRow = {
   locales: string[];
   hasStructuredOutput: boolean;
   systemPolicyPreview: string;
+  currentVersion?: number;
+  instructions?: Partial<Record<"pt-BR" | "en" | "es", string>>;
 };
 export type PromptsData = { prompts: PromptRow[] };
 
@@ -134,6 +138,8 @@ export type PoliciesData = {
     paidProvidersLocked?: boolean;
     dataClasses?: Record<string,{external?: string}>;
     providerMaxSensitivity?: Record<string,string>;
+    currentVersion?: number;
+    extraBlockedProviders?: string[];
   };
 };
 export type CostData = {
@@ -244,4 +250,58 @@ export type KnowledgeIngestResult = {
 };
 export function ingestKnowledge(input: KnowledgeIngestInput): Promise<KnowledgeIngestResult> {
   return adminRequest("/v1/admin/knowledge/ingest", { method: "POST", body: JSON.stringify(input) });
+}
+
+
+export type ControlPlaneResource = "prompt" | "route" | "policy";
+export type ControlPlaneDraftResult = {
+  requestId: string;
+  resource: ControlPlaneResource;
+  id: string;
+  version: number;
+  config: unknown;
+};
+export function createConfigDraft(resource: ControlPlaneResource, id: string, config: unknown): Promise<ControlPlaneDraftResult> {
+  return adminRequest("/v1/admin/config/drafts", {
+    method: "POST",
+    body: JSON.stringify({ resource, id, config }),
+  });
+}
+
+export type PromptDraftEvalResult = {
+  requestId: string;
+  runId: string;
+  promptId: string;
+  version: number;
+  latencyMs: number;
+  result: unknown;
+  meta: { providerClass: string; fallbackUsed: boolean; retries: number };
+};
+export function evaluatePromptDraft(input: {
+  promptId: string;
+  version: number;
+  locale: "pt-BR" | "en" | "es";
+  input: unknown;
+}): Promise<PromptDraftEvalResult> {
+  return adminRequest("/v1/admin/prompts/evaluate", {
+    method: "POST",
+    body: JSON.stringify({
+      ...input,
+      sanitized: true,
+      sensitivity: "P0_PUBLIC",
+    }),
+  });
+}
+
+export function promoteConfigDraft(resource: ControlPlaneResource, id: string, version: number): Promise<{
+  requestId: string;
+  resource: ControlPlaneResource;
+  id: string;
+  version: number;
+  status: "production";
+}> {
+  return adminRequest("/v1/admin/config/promote", {
+    method: "POST",
+    body: JSON.stringify({ resource, id, version }),
+  });
 }
