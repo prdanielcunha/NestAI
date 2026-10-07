@@ -13,10 +13,10 @@ export type LocalAiSupport = {
 
 export type LocalAiAdapter = {
   capabilities: LocalAiCapability[];
-  run<TInput = unknown, TResult = unknown>(
+  run(
     capability: LocalAiCapability,
-    input: TInput,
-  ): Promise<TResult>;
+    input: unknown,
+  ): Promise<unknown>;
 };
 
 export function detectLocalAiSupport(runtime: typeof globalThis = globalThis): LocalAiSupport {
@@ -52,12 +52,12 @@ export async function runLocalFirst<TResult>(args: {
   const eligible = localCapabilityEligible({
     enabled: args.enabled,
     capability: args.capability,
-    adapter: args.adapter,
+    ...(args.adapter !== undefined ? { adapter: args.adapter } : {}),
   });
 
   if (eligible && args.adapter) {
     try {
-      const result = await args.adapter.run<unknown, TResult>(args.capability, args.input);
+      const result = await args.adapter.run(args.capability, args.input) as TResult;
       return { result, execution: "local", degraded: false };
     } catch (error) {
       args.onLocalFailure?.(error);
