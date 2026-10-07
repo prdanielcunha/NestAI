@@ -79,6 +79,55 @@ jobs:
           console.log('NESTAI_OFFICIAL_DOMAIN_HEALTH_OK');
           NODE
 
+      - name: Live Cloudflare storage and primitives certification
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+
+          echo "nestai live storage certification ${GITHUB_SHA}" > /tmp/nestai-r2-smoke.txt
+          KEY="smoke/release-${GITHUB_SHA}.txt"
+
+          pnpm wrangler r2 object put "nestai-knowledge/${KEY}" \
+            --file /tmp/nestai-r2-smoke.txt \
+            --content-type text/plain \
+            --remote \
+            --force
+
+          pnpm wrangler r2 object get "nestai-knowledge/${KEY}" \
+            --file /tmp/nestai-r2-roundtrip.txt \
+            --remote
+
+          cmp /tmp/nestai-r2-smoke.txt /tmp/nestai-r2-roundtrip.txt
+
+          pnpm wrangler r2 object delete "nestai-knowledge/${KEY}" \
+            --remote \
+            --force
+
+          if pnpm wrangler r2 object get "nestai-knowledge/${KEY}" \
+            --file /tmp/nestai-r2-should-not-exist.txt \
+            --remote >/tmp/r2-delete-check.log 2>&1; then
+            echo "R2_DELETE_VERIFICATION_FAILED" >&2
+            cat /tmp/r2-delete-check.log >&2 || true
+            exit 1
+          fi
+
+          pnpm wrangler d1 execute nestai --remote \
+            --command "SELECT COUNT(*) AS rows FROM r2_usage_monthly;" \
+            >/tmp/nestai-d1-r2-ledger.txt
+          grep -q '"rows"' /tmp/nestai-d1-r2-ledger.txt
+
+          pnpm wrangler vectorize list >/tmp/nestai-vectorize.txt
+          grep -q "nestai-knowledge" /tmp/nestai-vectorize.txt
+
+          pnpm wrangler queues list >/tmp/nestai-queues.txt
+          grep -q "nestai-jobs" /tmp/nestai-queues.txt
+          grep -q "nestai-jobs-dlq" /tmp/nestai-queues.txt
+
+          echo "NESTAI_LIVE_CLOUDFLARE_PRIMITIVES_OK"
+
       - name: External provider readiness smoke
         shell: bash
         run: |
