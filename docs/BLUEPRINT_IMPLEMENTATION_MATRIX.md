@@ -31,7 +31,7 @@ Esta matriz registra evidências verificáveis. **Implementado** não significa 
 | F10 — Evaluation Lab | PARTIAL | Runner, thresholds, promotion gate e 80 golden cases sanitizados. Falta executar datasets contra providers reais, persistir métricas e bloquear releases via gate automático. |
 | F11 — RAG | PARTIAL / R2 LIVE VALIDATION PENDING | Vectorize `nestai-knowledge` criado; filtros/EvidenceRefs e IDs tenant-scoped. O proprietário confirmou a ativação do R2 em 07/10/2026. Branch de implementação adiciona bucket Standard, lifecycle, ledger 50/60/70/80%, reconciliação e persistência degradável da fonte RAG. Falta reprovisionar após merge e executar smoke autenticado de ingest/query/read/delete/reconciliation. |
 | F12 — Jobs/Media | PARTIAL | KV, Queues `nestai-jobs`/`nestai-jobs-dlq`, APIs áudio/visão/embedding/imagem, job polling e retry. Falta certificação E2E de DLQ, retries, OCR, arquivos grandes e limites gratuitos. |
-| F13 — Migração dos apps | PARTIAL | 8/8 manifests e registro automático; Hub token/App Check integrado. **Ainda não concluída** a troca de chamadas diretas e instalação funcional do SDK em todos os apps. |
+| F13 — Migração dos apps | PARTIAL | Verificação de fonte em 07/10: **8/8 manifests** em production; os oito repositórios contêm dependência imutável `@millionsnest/ai` e caminho de execução de SDK (Hub, Connect, Local, MusicScale, Finance, Journey, Affiliate, Lume). Isso **não** certifica E2E real, retirada de todas as chamadas diretas, privacidade ou rollback. Sete repositórios estão sincronizados main/production; MusicScale não. |
 | F14 — Hardening | PARTIAL | CI, security tests, simulações de caos, runbooks e smoke release. Faltam carga/soak, red-team, DR/restore testado, canary/rollback exercitado, auditoria WCAG e SLO observado. |
 
 ## Critérios de aceite do MVP técnico (§94)
@@ -64,9 +64,9 @@ Esta matriz registra evidências verificáveis. **Implementado** não significa 
 ## Integração automática (§96)
 
 **PARTIAL.** Auto-registro OIDC **8/8 comprovado** e SDK empacotado/publicado; ainda faltam:
-- instalação efetiva e lockfile reproduzível em cada repositório;
+- confirmar instalação reproduzível/lockfile e execução correta do SDK em CI e ambiente publicado de cada repositório (dependência e imports identificados em fonte, ainda não equivalem a E2E);
 - chamada autorizada, chamada negada e teste de privacidade a partir de cada consumidor;
-- substituição progressiva de provider-specific code com feature flags e rollback;
+- auditar e eliminar rotas diretas remanescentes de providers com feature flags e rollback;
 - prova de troca de modelo no NestAI sem deploy do app;
 - remoção de credenciais de providers mantidas nos apps após cutover comprovado.
 
@@ -77,3 +77,20 @@ Esta matriz registra evidências verificáveis. **Implementado** não significa 
 ## Itens futuros (§§89–93)
 
 **FUTURE:** on-device AI, voice agents, monetização de conhecimento por cliente, entitlements pagos e SLAs premium. Devem continuar arquiteturalmente possíveis, mas **não serão habilitados no modo FREE_ONLY** sem aprovação posterior.
+
+## Revisão de 07/10/2026 — rastreabilidade da migração em código
+
+Consulta direta aos oito repositórios em GitHub (branches `main` e `production`). Escopo: manifests, dependência SDK, pontos de chamada e commits. **Não representa validação de APIs autenticadas ou teste de uso dos aplicativos publicados.**
+
+| App | Comprovação de integração em fonte | Igualdade main/production | Pendente mais importante |
+| --- | --- | --- | --- |
+| MillionsNest Hub | SDK e serviço MusicScale Live no backend, além de emissão de token | Igual | Certificar autorização Hub por consumidor e fluxo real |
+| MillionsNest Connect | `connectNestAiClient.ts` com run/stream/transcribe; Inbox integrado | Igual | Classificação, resposta e áudio E2E com revisão humana |
+| NestLocal | `src/nestai.mjs` e exchange de sessão com Hub | Igual | Serviço publicado, sessão real e preços/agenda determinísticos |
+| MusicScale | Proxy `services/server/nestAiProxy.ts` e rotas IA com SDK | **Divergente: seis commits em main** | Testar mudanças recentes das regras/versão antes de promover; validar cliente afetado |
+| NestFinance | Proxy de IA sensível com token/App Check e providers migrados | Igual | OCR real, emulador, isolamento e qualidade de extração |
+| NestJourney | `src/nestAi.ts` e intake de imagem com revisão humana | Igual | E2E OCR, regras Firestore, retorno ao manual e aceite |
+| NestAffiliate | `apps/web/src/services/nestAiClient.ts` para copy, análise e imagem | Igual | E2E de geração real, revisão de criativos, origem dos dados |
+| NestLume | `src/lib/nestai-client.ts` para estudo com evidência e guest | Igual | Resposta fundamentada E2E, App Check e privacidade de texto colado |
+
+**Automatização adicionada em branch de revisão:** `scripts/audit-ecosystem-cutover.mjs` + `tests/audit-ecosystem-cutover.test.mjs` + workflow manual `audit-ecosystem-cutover.yml`. O script compara manifests de produção, tarefas/ownership, SDK imutável e divergência de branches sem executar IA ou modificar dados. Ele sempre apresenta `liveE2E: NOT_CERTIFIED_BY_THIS_AUDIT`. A promoção exige QA e smoke autenticado separado.
