@@ -79,6 +79,29 @@ jobs:
           console.log('NESTAI_OFFICIAL_DOMAIN_HEALTH_OK');
           NODE
 
+      - name: External provider readiness smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL="https://ai.millionsnest.com"
+
+          curl --fail --silent --show-error \
+            --retry 10 --retry-delay 3 --retry-all-errors \
+            "$BASE_URL/v1/health/providers" -o /tmp/provider-health.json
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const body = JSON.parse(fs.readFileSync('/tmp/provider-health.json','utf8'));
+          if (body.ok !== true || body.service !== 'nestai' || body.billingMode !== 'FREE_ONLY') {
+            throw new Error('NESTAI_PROVIDER_HEALTH_INVALID');
+          }
+          for (const provider of ['groq','gemini','mistral']) {
+            const probe = body.probes?.[provider];
+            if (!probe?.state) throw new Error('NESTAI_PROVIDER_PROBE_MISSING_' + provider.toUpperCase());
+            console.log(`NESTAI_PROVIDER_${provider.toUpperCase()}=${probe.state}`);
+          }
+          NODE
+
       - name: Mission Control smoke
         shell: bash
         run: |
