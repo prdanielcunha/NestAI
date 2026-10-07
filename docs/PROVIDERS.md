@@ -4,38 +4,71 @@ Last reviewed: 2026-10-07
 
 ## Runtime strategy
 
-NestAI is multi-provider by design. Consuming apps call canonical tasks; they never choose a provider or carry provider secrets. Routing must preserve privacy first, then capability, free eligibility, health, quality, latency and quota.
+NestAI is the only AI routing authority for MillionsNest applications. Consumers call canonical task IDs through `@millionsnest/ai`; they do not select providers/models and never receive provider secrets.
+
+Routing order is privacy and authorization first, then capability, FREE_ONLY eligibility, health, quality, latency and quota. Provider/model failures may reduce capability but may never weaken sensitivity policy or enable paid fallback.
+
+## Current provider state
+
+| Provider | Role | Customer traffic | Sensitive data | Current state |
+| --- | --- | --- | --- | --- |
+| Cloudflare Workers AI | central/private fallback, P3, RAG, vision, image, transcription | yes | up to task policy; P3 preferred | production |
+| Groq GPT-OSS 120B/20B | text/reasoning/structured/transcription | yes | only policy-eligible tasks | production |
+| Groq Qwen3.8-27B | candidate text/vision/reasoning | no until promotion gates pass | no customer data while candidate | candidate |
+| Groq Prompt Guard 2 86M | prompt-injection classifier | security sub-call only | P0-P2 after minimization; P3/P4 never sent | enabled behind flag |
+| Gemini 3.5 Flash-Lite | restricted fallback | P0/P1 allowlisted only | P2/P3/P4 prohibited | production-restricted |
+| Mistral Small | laboratory fallback | no | no | configured but quota_blocked |
+| NVIDIA NIM | Evaluation Lab | never | sanitized P0/P1 only | evalOnly |
+| local:webgpu | on-device simple capabilities | device-local | may handle P4 locally | foundation/candidate |
 
 ## Cloudflare Workers AI
 
-**Account setup:** already part of the Cloudflare Worker through the `AI` binding; no separate model API key is required in consuming apps.
+Uses the Worker `AI` binding; there is no provider API key in consumer apps. It remains the central privacy-preserving provider and the only external path allowed for current P3 AI extraction tasks.
 
-Primary privacy-preserving provider for P3-eligible workloads, multimodal extraction, embeddings, image generation, transcription and safe fallback. Workers AI free capacity remains controlled by the NestAI quota engine. Any model requiring paid billing must remain `freeEligible=false`.
+RAG candidates:
+- `@cf/google/embeddinggemma-300m` — current production embedding.
+- `@cf/baai/bge-m3` — 1024-dimensional multilingual candidate; Evaluation Lab only until promoted.
+- `@cf/baai/bge-reranker-base` — reranker, enabled with a kill switch and deterministic vector-order fallback.
 
 ## Groq
 
-**Manual account step required once:** create a Groq API key and store it as the Worker secret `GROQ_API_KEY`. The repository cannot read or prove secret values by design.
+Worker secret: `GROQ_API_KEY`. The same backend-only key is shared by authorized Groq models.
 
-Primary external free provider for text, reasoning, structured output and transcription. Current reviewed Free Plan limits for GPT-OSS 120B/20B are 30 RPM, 1,000 RPD, 8,000 TPM and 200,000 TPD. Whisper V3/V3 Turbo: 20 RPM, 2,000 RPD and 28,800 audio seconds/day. Limits remain registry/config values and must be reviewed periodically.
+Registered:
+- `openai/gpt-oss-120b` — production reasoning/quality.
+- `openai/gpt-oss-20b` — production fast path.
+- `qwen/qwen3.8-27b` — candidate only.
+- `meta-llama/llama-prompt-guard-2-86m` — defense-in-depth prompt-injection classifier.
+- Whisper V3 Turbo — transcription where task policy permits.
+
+Quota metadata is reviewed and dated in the registries/cost guard; limits are not treated as eternal constants.
 
 ## Gemini Free
 
-**Manual account step required once:** create a Gemini API key and store it as the Worker secret `GEMINI_API_KEY`.
+Worker secret: `GEMINI_API_KEY`. Production probe is currently ready.
 
-Production candidate is `gemini-3.5-flash-lite` (GA). It is enabled only for explicitly whitelisted P0/non-sensitive tasks. Gemini Free Tier data may be used to improve Google products, therefore P2/P3/P4 never route to Gemini Free. The previous `gemini-2.5-flash-lite` entry remains blocked to avoid new-project availability issues.
+Gemini Free remains restricted because free-tier data handling is not appropriate for MillionsNest personal/sensitive workloads. P2/P3/P4 are blocked. No consumer app contains the Gemini key.
 
-## Mistral Free mode
+## Mistral
 
-**Manual account step required once:** create a Mistral Studio API key and store it as `MISTRAL_API_KEY`. Free mode itself does not require a credit card, but the key follows the Organization/Workspace plan and pay-as-you-go settings.
+Worker secret: `MISTRAL_API_KEY`. The key authenticates but the production entitlement probe currently reports `quota_blocked`. Mistral remains fail-closed/laboratory and is not required for any app feature.
 
-The adapter and Mistral Small 4 (`mistral-small-2603`) remain laboratory-only in `FREE_ONLY`. Before production routing, confirm in the Mistral account that:
-- the workspace is in Free mode;
-- pay-as-you-go is disabled;
-- the included monthly usage/limits are known;
-- the production key belongs to that guarded workspace.
+No paid upgrade or pay-as-you-go fallback is permitted.
 
-Until that account state is verifiable, `freeEligible=false` is intentional.
+## NVIDIA NIM
 
-## Paid providers
+Worker secret: `NVIDIA_API_KEY`, already configured. NVIDIA is explicitly `evalOnly`:
+- `productionTrafficAllowed=false`
+- `customerTrafficAllowed=false`
+- P2/P3/P4 denied
+- sanitized/synthetic Evaluation Lab data only
 
-Adapters may exist disabled, but no paid provider or pay-as-you-go fallback may execute while `AI_BILLING_MODE=FREE_ONLY`. No provider failure may weaken privacy classification or silently enable billing.
+The normal Router cannot select NVIDIA.
+
+## Local / WebGPU
+
+The local runtime exposes capability detection, WebGPU/WASM fallback orchestration, normalization and PII pre-detection foundations. Apps do not know a concrete local model ID. P4 is never sent to a remote provider; if a P4 capability requires AI and local execution is unavailable, the operation fails closed.
+
+## FREE_ONLY
+
+`AI_BILLING_MODE=FREE_ONLY`, `ALLOW_PAID_FALLBACK=false`, `AUTO_UPGRADE_PROVIDER=false` are invariants. Adapters may exist for future providers, but no paid execution is reachable in FREE_ONLY.
