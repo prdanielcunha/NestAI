@@ -1,6 +1,12 @@
 name: Audit ecosystem NestAI cutover
 on:
   workflow_dispatch:
+  push:
+    branches: ["production"]
+    paths:
+      - .github/workflows/audit-ecosystem-cutover.yml
+  schedule:
+    - cron: '23 10 * * *'
   pull_request:
     paths:
       - scripts/audit-ecosystem-cutover.mjs
