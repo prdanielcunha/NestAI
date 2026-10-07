@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - scripts/audit-ecosystem-cutover.mjs
-      - tests/audit-ecosystem-cutover.test.mjs
+      - tests/audit-ecosystem-cutover.nodecheck.mjs
       - .github/workflows/audit-ecosystem-cutover.yml
 permissions:
   contents: read
@@ -17,7 +17,7 @@ jobs:
         with:
           node-version: '24'
       - name: Unit tests — no network or provider costs
-        run: node --test tests/audit-ecosystem-cutover.test.mjs
+        run: node --test tests/audit-ecosystem-cutover.nodecheck.mjs
       - name: Audit eight production application repositories
         env:
           GITHUB_TOKEN: ${{ github.token }}
