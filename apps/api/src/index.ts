@@ -106,7 +106,7 @@ function statusFor(code: string): number {
   if (code.startsWith("AUTH_") || code.startsWith("APP_CHECK_")) return 401;
   if (code === "TASK_NOT_REGISTERED") return 404;
   if (code.startsWith("COST_GUARD_") || code.startsWith("R2_") || code === "RATE_LIMITED") return 429;
-  if (code.startsWith("PRIVACY_") || code.startsWith("OUTPUT_SCHEMA_") || code.startsWith("EVIDENCE_") || code === "ROUTER_NO_ELIGIBLE_MODEL") return 422;
+  if (code.startsWith("PRIVACY_") || code.startsWith("PROMPT_GUARD_") || code.startsWith("OUTPUT_SCHEMA_") || code.startsWith("EVIDENCE_") || code === "ROUTER_NO_ELIGIBLE_MODEL") return 422;
   if (code === "AI_DISABLED" || code === "APP_AI_DISABLED") return 503;
   if (code === "PROVIDER_TIMEOUT") return 504;
   return 500;
@@ -1017,6 +1017,12 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         sensitivity: body.sensitivity ?? "P0_PUBLIC",
         customerTraffic: false,
       });
+      if (target.provider === "nvidia-nim" && env.AI_NVIDIA_EVAL_ENABLED !== "true") {
+        throw new Error("EVAL_NVIDIA_DISABLED");
+      }
+      if (target.id === "cloudflare:bge-m3" && env.AI_BGE_M3_ENABLED !== "true") {
+        throw new Error("EVAL_BGE_M3_DISABLED");
+      }
 
       let result: unknown;
       if (target.kind === "text_model") {
