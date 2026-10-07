@@ -8,6 +8,7 @@ import {
   getActivePromptOverride,
 } from "../../packages/control-plane/src/index.js";
 import { buildTaskPrompt } from "../../packages/prompt-registry/src/index.js";
+import type { D1DatabaseLike } from "../../packages/usage-ledger/src/index.js";
 
 function dbReturning(row: Record<string, unknown> | null) {
   return {
@@ -17,7 +18,7 @@ function dbReturning(row: Record<string, unknown> | null) {
         async first() { return row; },
       };
     },
-  } as any;
+  } as unknown as D1DatabaseLike;
 }
 
 describe("versioned control-plane safety", () => {
