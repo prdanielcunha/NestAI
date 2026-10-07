@@ -482,9 +482,18 @@ async function recordProviderAttempt(
 async function runPromptGuard(
   env: Env,
   text: string,
-  options: { untrustedExternalContent: boolean; appId: string; organizationId: string },
+  options: {
+    untrustedExternalContent: boolean;
+    appId: string;
+    organizationId: string;
+    sensitivity: ReturnType<typeof classifyPrivacy>["sensitivity"];
+  },
 ): Promise<PromptGuardDecision> {
-  if (env.AI_PROMPT_GUARD_ENABLED !== "true") {
+  if (
+    env.AI_PROMPT_GUARD_ENABLED !== "true" ||
+    options.sensitivity === "P3_SENSITIVE" ||
+    options.sensitivity === "P4_RESTRICTED"
+  ) {
     return scanPromptInjection({
       text,
       classify: async () => "LABEL_0",
@@ -570,6 +579,25 @@ async function prepareTaskExecution(
   if (!privacy.externalAllowed) {
     await recordRuntimeEvent(env.DB, { id: crypto.randomUUID(), eventType: "privacy_rejected", appId: task.app, task: task.id });
     throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
+  }
+
+  if (task.modality === "text") {
+    const serializedInput = typeof parsed.input === "string" ? parsed.input : JSON.stringify(parsed.input);
+    const guard = await runPromptGuard(env, serializedInput, {
+      untrustedExternalContent: false,
+      appId: task.app,
+      organizationId,
+      sensitivity: privacy.sensitivity,
+    });
+    if (guard.verdict !== "benign") {
+      await recordRuntimeEvent(env.DB, {
+        id: crypto.randomUUID(),
+        eventType: "prompt_guard_flagged",
+        appId: task.app,
+        task: task.id,
+      });
+    }
+    assertPromptGuardPolicy(guard, "user");
   }
 
   return {
