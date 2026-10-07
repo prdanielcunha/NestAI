@@ -647,21 +647,46 @@ async function executeJobEnvelope(env: Env, job: JobEnvelope): Promise<unknown> 
   if (task.modality === "vision") {
     const input = VisionInput.parse(job.payload);
     await recordProviderAttempt(env, claims, task, job.organizationId, "cloudflare");
-    const converted = await withTimeout(
-      () => extractDocumentTextWithCloudflare(env.AI, {
-        base64: input.fileBase64,
-        mimeType: input.mimeType,
-        fileName: input.fileName,
-        locale: job.locale,
-      }),
-      Math.min(task.timeoutMs, 25_000),
-    );
+    const convertedInput = "files" in input
+      ? await withTimeout(
+          () => extractDocumentsTextWithCloudflare(env.AI, {
+            files: input.files.map((file) => ({
+              base64: file.fileBase64,
+              mimeType: file.mimeType,
+              fileName: file.fileName,
+              ...(file.label ? { label: file.label } : {}),
+            })),
+            locale: job.locale,
+          }),
+          Math.min(task.timeoutMs, 25_000),
+        )
+      : [await withTimeout(
+          () => extractDocumentTextWithCloudflare(env.AI, {
+            base64: input.fileBase64,
+            mimeType: input.mimeType,
+            fileName: input.fileName,
+            locale: job.locale,
+          }),
+          Math.min(task.timeoutMs, 25_000),
+        ).then((item) => ({
+          fileName: input.fileName,
+          ...("label" in input && input.label ? { label: input.label } : {}),
+          text: item.text,
+          ...(item.tokens !== undefined ? { tokens: item.tokens } : {}),
+        }))];
     const structured = getStructuredContract(task.id);
     const candidates = await safeCandidates(env, prepared, "text", structured !== null);
     const prompt = buildTaskPrompt({
       taskId: task.id,
       locale: job.locale,
-      input: { extractedText: converted.text },
+      input: {
+        files: convertedInput.map(({ fileName, label, text }) => ({
+          fileName,
+          ...(label ? { label } : {}),
+          extractedText: text,
+        })),
+        context: input.context ?? {},
+      },
     });
     const execution = await executeWithSafeFallback({
       candidates,
