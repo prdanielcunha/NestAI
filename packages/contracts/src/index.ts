@@ -22,14 +22,25 @@ export const AudioInput = z.object({
 });
 export type AudioInput = z.infer<typeof AudioInput>;
 
-export const VisionInput = z.object({
+const VisionFile = z.object({
   fileBase64: z.string().min(4).max(16_000_000),
   mimeType: z.enum([
     "image/jpeg","image/png","image/webp","image/gif","image/bmp",
     "application/pdf"
   ]),
   fileName: z.string().min(1).max(160),
+  label: z.string().min(1).max(160).optional(),
 });
+
+export const VisionInput = z.union([
+  VisionFile.extend({
+    context: z.record(z.string(), z.unknown()).optional(),
+  }),
+  z.object({
+    files: z.array(VisionFile).min(1).max(40),
+    context: z.record(z.string(), z.unknown()).optional(),
+  }),
+]);
 export type VisionInput = z.infer<typeof VisionInput>;
 
 export const EmbeddingInput = z.object({
