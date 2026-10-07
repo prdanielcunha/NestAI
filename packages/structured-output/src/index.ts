@@ -35,6 +35,44 @@ const musicStructureSchema = z.object({
   uncertain: z.array(z.string()),
 });
 
+const musicScaleLiveSchema = z.object({
+  summary: z.string().min(1).max(5000),
+  confidence: z.number().min(0).max(1),
+  suggestions: z.array(z.object({
+    kind: z.string().min(1),
+    label: z.string().min(1),
+    reason: z.string().min(1),
+    value: z.string().optional(),
+  })).max(12),
+  warnings: z.array(z.string()).max(12),
+});
+
+const musicScaleLiveJsonSchema: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["summary","confidence","suggestions","warnings"],
+  properties: {
+    summary: { type: "string", minLength: 1, maxLength: 5000 },
+    confidence: { type: "number", minimum: 0, maximum: 1 },
+    suggestions: {
+      type: "array",
+      maxItems: 12,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["kind","label","reason"],
+        properties: {
+          kind: { type: "string", minLength: 1 },
+          label: { type: "string", minLength: 1 },
+          reason: { type: "string", minLength: 1 },
+          value: { type: "string" },
+        },
+      },
+    },
+    warnings: { type: "array", maxItems: 12, items: { type: "string" } },
+  },
+};
+
 const affiliateProductSchema = z.object({
   facts: z.array(z.string()),
   opportunities: z.array(z.string()),
@@ -166,6 +204,13 @@ export const structuredContracts: Record<string, StructuredContract> = {
       },
     },
   },
+  "musicscale.live.diagnostic.explain": { id: "musicscale.live.diagnostic.explain.v1", schema: musicScaleLiveSchema, jsonSchema: musicScaleLiveJsonSchema },
+  "musicscale.live.song-match.assist": { id: "musicscale.live.song-match.assist.v1", schema: musicScaleLiveSchema, jsonSchema: musicScaleLiveJsonSchema },
+  "musicscale.live.request.classify": { id: "musicscale.live.request.classify.v1", schema: musicScaleLiveSchema, jsonSchema: musicScaleLiveJsonSchema },
+  "musicscale.live.search.interpret": { id: "musicscale.live.search.interpret.v1", schema: musicScaleLiveSchema, jsonSchema: musicScaleLiveJsonSchema },
+  "musicscale.live.metadata.normalize": { id: "musicscale.live.metadata.normalize.v1", schema: musicScaleLiveSchema, jsonSchema: musicScaleLiveJsonSchema },
+  "musicscale.live.post-service.summary": { id: "musicscale.live.post-service.summary.v1", schema: musicScaleLiveSchema, jsonSchema: musicScaleLiveJsonSchema },
+  "musicscale.live.pre-service-risk.explain": { id: "musicscale.live.pre-service-risk.explain.v1", schema: musicScaleLiveSchema, jsonSchema: musicScaleLiveJsonSchema },
   "affiliate.product.analyze": {
     id: "affiliate.product.analyze.v1",
     schema: affiliateProductSchema,
