@@ -40,7 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           node --input-type=module -e "const m=await import('./packages/sdk/dist/index.js'); if(typeof m.createNestAiClient!=='function') process.exit(1); console.log('NESTAI_SDK_IMPORT_OK')"
-      - name: Create or update GitHub release
+      - name: Publish immutable GitHub release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -50,7 +50,8 @@ jobs:
           set -euo pipefail
           TAG="sdk-v$VERSION"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "release/$FILE" --clobber
+            echo "Release $TAG already exists. Refusing to overwrite a published SDK version." >&2
+            exit 1
           else
             gh release create "$TAG" "release/$FILE"               --target "${GITHUB_SHA}"               --title "@millionsnest/ai v$VERSION"               --notes "Official NestAI SDK package."
           fi
