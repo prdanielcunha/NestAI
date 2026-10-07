@@ -1,0 +1,32 @@
+name: Certify NestAI public production readiness
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 9 * * *'
+  pull_request:
+    paths:
+      - scripts/certify-live-readiness.mjs
+      - tests/certify-live-readiness.nodecheck.mjs
+      - .github/workflows/certify-live-readiness.yml
+permissions:
+  contents: read
+jobs:
+  public-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test probe without external traffic
+        run: node --test tests/certify-live-readiness.nodecheck.mjs
+      - name: Verify published NestAI and Hub endpoints (read-only)
+        run: node scripts/certify-live-readiness.mjs
+      - name: Publish structured evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nestai-live-readiness
+          path: nestai-live-readiness.json
+          if-no-files-found: warn
