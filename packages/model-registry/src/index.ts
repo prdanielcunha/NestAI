@@ -13,6 +13,7 @@ export type ModelDescriptor = {
   reasoning?: boolean;
   vision?: boolean;
   audioIn?: boolean;
+  audioOut?: boolean;
   embedding?: boolean;
   embeddingDimensions?: number;
   imageOut?: boolean;
@@ -68,6 +69,25 @@ export const models = {
     vision: true,
     productionTrafficAllowed: false,
     customerTrafficAllowed: false,
+    reviewedAt: "2026-10-07",
+  },
+  // Candidate only: safety reasoning against a tenant-specific policy.
+  // It is NOT a hard DLP/security authority and cannot receive customer traffic.
+  "groq:gpt-oss-safeguard-20b": {
+    provider: "groq",
+    providerModelId: "openai/gpt-oss-safeguard-20b",
+    status: "preview",
+    promotionStage: "candidate",
+    freeEligible: true,
+    paidRequired: false,
+    context: 131072,
+    structuredOutput: true,
+    reasoning: true,
+    safetyClassifier: true,
+    productionTrafficAllowed: false,
+    customerTrafficAllowed: false,
+    evalOnly: true,
+    commercialUse: "review_required",
     reviewedAt: "2026-10-07",
   },
   "groq:prompt-guard-2-86m": {
@@ -204,6 +224,41 @@ export const models = {
     vision: true,
     commercialUse: "review_required",
     attributionRequired: false,
+    reviewedAt: "2026-10-07",
+  },
+  // Public or internal synthetic benchmarks only. Free Tier data-use terms
+  // prohibit sending customer P2/P3/P4 data.
+  "gemini:3.7-flash": {
+    provider: "gemini",
+    providerModelId: "gemini-3.7-flash",
+    status: "preview",
+    promotionStage: "candidate",
+    freeEligible: true,
+    paidRequired: false,
+    structuredOutput: true,
+    tools: true,
+    reasoning: true,
+    vision: true,
+    productionTrafficAllowed: false,
+    customerTrafficAllowed: false,
+    evalOnly: true,
+    commercialUse: "review_required",
+    reviewedAt: "2026-10-07",
+  },
+  // Future Portuguese speech for PUBLIC content. No production TTS adapter or
+  // audio-out SDK method is enabled by registering a descriptor.
+  "gemini:3.8-flash-lite-tts": {
+    provider: "gemini",
+    providerModelId: "gemini-3.8-flash-lite-tts",
+    status: "preview",
+    promotionStage: "candidate",
+    freeEligible: true,
+    paidRequired: false,
+    audioOut: true,
+    productionTrafficAllowed: false,
+    customerTrafficAllowed: false,
+    evalOnly: true,
+    commercialUse: "review_required",
     reviewedAt: "2026-10-07",
   },
   "gemini:2.5-flash-lite": {
