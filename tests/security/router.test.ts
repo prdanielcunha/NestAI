@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { routeModel } from "../../packages/router/src/index.js";
+import { routeCandidates, routeModel } from "../../packages/router/src/index.js";
 
 describe("deterministic router", () => {
   it("prefers the smaller Groq production model for eligible text", () => {
