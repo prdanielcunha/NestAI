@@ -4,6 +4,7 @@ import { verifyFirebaseAppCheckToken } from "../../../packages/app-check/src/ind
 import { classifyPrivacy, redactSensitiveText } from "../../../packages/privacy-firewall/src/index.js";
 import { scanPromptInjection, type PromptGuardDecision } from "../../../packages/prompt-guard/src/index.js";
 import { getTask, type TaskDefinition } from "../../../packages/task-registry/src/index.js";
+import { promptGuardPolicy } from "../../../packages/policy-engine/src/index.js";
 import { routeCandidates, type RouteDecision } from "../../../packages/router/src/index.js";
 import {
   generateWithCloudflare,
@@ -518,8 +519,13 @@ async function runPromptGuard(
 }
 
 function assertPromptGuardPolicy(decision: PromptGuardDecision, source: "user" | "retrieved"): void {
-  if (decision.action === "ALLOW") return;
-  if (source === "retrieved") throw new Error("RAG_UNTRUSTED_CONTENT_QUARANTINED");
+  const action = promptGuardPolicy({
+    verdict: decision.verdict,
+    source,
+    criticalAction: false,
+  });
+  if (action === "ALLOW") return;
+  if (action === "QUARANTINE") throw new Error("RAG_UNTRUSTED_CONTENT_QUARANTINED");
   throw new Error(decision.verdict === "malicious" ? "PROMPT_GUARD_BLOCKED" : "PROMPT_GUARD_REVIEW_REQUIRED");
 }
 
