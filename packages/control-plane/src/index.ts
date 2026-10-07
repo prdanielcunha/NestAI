@@ -3,6 +3,7 @@ import { tasks } from "../../task-registry/src/index.js";
 import { models } from "../../model-registry/src/index.js";
 import { providers } from "../../provider-registry/src/index.js";
 import { providerFreeQuota, quotaHealth } from "../../cost-guard/src/index.js";
+import { getR2Usage, R2_FREE_TIER, R2_SAFETY } from "../../r2-storage/src/index.js";
 import { routeCandidates } from "../../router/src/index.js";
 import { prompts } from "../../prompt-registry/src/index.js";
 import { getStructuredContract } from "../../structured-output/src/index.js";
@@ -198,15 +199,28 @@ export async function controlPlaneObservability(db: D1DatabaseLike, now = new Da
 
 export async function controlPlaneCostQuota(db: D1DatabaseLike, now = new Date()) {
   const day = utcDay(now);
-  const rows = await db.prepare(
-    "SELECT scope_type, scope_id, provider, task, requests, provider_calls FROM daily_usage_dimensions WHERE day = ?1 ORDER BY provider_calls DESC LIMIT 500"
-  ).bind(day).all<Record<string, unknown>>();
+  const [rows, r2] = await Promise.all([
+    db.prepare(
+      "SELECT scope_type, scope_id, provider, task, requests, provider_calls FROM daily_usage_dimensions WHERE day = ?1 ORDER BY provider_calls DESC LIMIT 500"
+    ).bind(day).all<Record<string, unknown>>(),
+    getR2Usage(db, now),
+  ]);
   return {
     day,
     actualSpendBrl: 0,
     paidProvidersLocked: true,
     policies: providerFreeQuota,
     usage: rows.results ?? [],
+    r2: {
+      ...r2,
+      freeTier: R2_FREE_TIER,
+      safety: R2_SAFETY,
+      remaining: {
+        storageBytes: Math.max(0, R2_FREE_TIER.storageBytes - r2.storageBytes),
+        classAOps: Math.max(0, R2_FREE_TIER.classAOps - r2.classAOps),
+        classBOps: Math.max(0, R2_FREE_TIER.classBOps - r2.classBOps),
+      },
+    },
   };
 }
 

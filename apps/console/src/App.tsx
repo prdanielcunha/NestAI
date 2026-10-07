@@ -420,17 +420,40 @@ function PoliciesPage({ data }: { data: api.PoliciesData | null }) {
 
 function CostPage({ locale, data }: { locale: Locale; data: api.CostData | null }) {
   const usage = data?.usage ?? [];
+  const r2 = data?.r2;
+  const pct = (value: number | undefined) => value === undefined ? "—" : Math.round(value * 100) + "%";
+  const gb = (bytes: number | undefined) => bytes === undefined ? "—" : (bytes / 1_000_000_000).toFixed(2) + " GB";
   return (
     <div className="page-grid">
       <PageIntro eyebrow="ECONOMICS" title="Cost & Quota" text="Capacity is treated as a budget even while actual provider spend is zero." />
       <div className="metrics-grid span-12">
         <Metric label={tr(locale, "actualSpend")} value={"R$ " + Number(data?.actualSpendBrl ?? 0).toFixed(2).replace(".", ",")} />
-        <Metric label="Estimated equivalent" value="—" sub="needs benchmark pricing snapshot" />
-        <Metric label={tr(locale, "freeCapacity")} value="FREE" sub="provider quotas enforced" />
+        <Metric label="R2 safety state" value={r2?.health ?? "—"} sub={"highest usage " + pct(r2?.highestFraction)} />
+        <Metric label="R2 storage" value={gb(r2?.storageBytes)} sub={"free-tier use " + pct(r2?.storageFraction)} />
         <Metric label={tr(locale, "paidProviders")} value={tr(locale, "locked")} sub="FREE_ONLY hard lock" />
       </div>
-      <Card title="Quota policies" className="span-5"><JsonPreview value={data?.policies ?? {}} /></Card>
-      <Card title="Usage dimensions" className="span-7">{usage.length ? <JsonPreview value={usage} /> : <Empty text="No usage rows today." />}</Card>
+      <Card title="R2 zero-cost guard" eyebrow="50% WATCH · 60% CONSERVE · 70% BLOCK · 80% HARD LOCK" className="span-7">
+        <div className="quota-grid">
+          <div className="quota-card">
+            <div className="quota-top"><strong>Storage</strong><StatusPill>{r2?.health ?? "—"}</StatusPill></div>
+            <div className="quota-number">{pct(r2?.storageFraction)}</div>
+            <div className="bar"><span style={{ width: Math.min(100, Math.round((r2?.storageFraction ?? 0) * 100)) + "%" }} /></div>
+            <small>{gb(r2?.remaining?.storageBytes)} free-tier headroom</small>
+          </div>
+          <div className="quota-card">
+            <div className="quota-top"><strong>Class A</strong><StatusPill>{pct(r2?.classAFraction)}</StatusPill></div>
+            <div className="quota-number">{Number(r2?.classAOps ?? 0).toLocaleString()}</div>
+            <small>{Number(r2?.remaining?.classAOps ?? 0).toLocaleString()} operations remaining</small>
+          </div>
+          <div className="quota-card">
+            <div className="quota-top"><strong>Class B</strong><StatusPill>{pct(r2?.classBFraction)}</StatusPill></div>
+            <div className="quota-number">{Number(r2?.classBOps ?? 0).toLocaleString()}</div>
+            <small>{Number(r2?.remaining?.classBOps ?? 0).toLocaleString()} operations remaining</small>
+          </div>
+        </div>
+      </Card>
+      <Card title="Provider quota policies" className="span-5"><JsonPreview value={data?.policies ?? {}} /></Card>
+      <Card title="Usage dimensions" className="span-12">{usage.length ? <JsonPreview value={usage} /> : <Empty text="No usage rows today." />}</Card>
     </div>
   );
 }

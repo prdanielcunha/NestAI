@@ -62,14 +62,15 @@ export const providers = {
     dataPolicy: "free_tier_may_improve_products",
     commercialUse: "review_required",
     attributionRequired: false,
-    termsReviewedAt: "2026-10-06",
+    termsReviewedAt: "2026-10-07",
     sourceUrls: [
       "https://ai.google.dev/gemini-api/docs/pricing",
       "https://ai.google.dev/gemini-api/terms",
     ],
     notes: [
       "Free Tier may be used to improve Google products; never route P2/P3/P4.",
-      "Only tasks explicitly whitelisting Gemini may use it.",
+      "Stable Gemini 3.5 Flash-Lite is eligible only for explicitly whitelisted non-sensitive tasks.",
+      "Provider is available at runtime only when GEMINI_API_KEY is configured as a Worker secret.",
     ],
   },
   mistral: {
@@ -80,13 +81,16 @@ export const providers = {
     dataPolicy: "review_required",
     commercialUse: "review_required",
     attributionRequired: false,
-    termsReviewedAt: "2026-10-06",
+    termsReviewedAt: "2026-10-07",
     sourceUrls: [
       "https://docs.mistral.ai/models",
+      "https://docs.mistral.ai/getting-started/quickstarts/studio/activate-and-generate-api-key",
+      "https://docs.mistral.ai/admin/billing-usage/subscriptions",
     ],
     notes: [
-      "Adapter exists for controlled laboratory/fallback evaluation.",
-      "FREE_ONLY routing remains disabled until account-level free eligibility is re-verified.",
+      "Mistral Free mode exists without a credit card and includes limited monthly API usage.",
+      "An API key must still be created manually and is bound to the Organization/Workspace plan settings.",
+      "FREE_ONLY routing stays disabled until Free mode is confirmed and pay-as-you-go is confirmed off for the production workspace.",
     ],
   },
 } as const satisfies Record<ProviderId, ProviderDescriptor>;

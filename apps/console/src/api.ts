@@ -142,6 +142,20 @@ export type CostData = {
   paidProvidersLocked?: boolean;
   policies?: Record<string, unknown>;
   usage?: Array<Record<string, unknown>>;
+  r2?: {
+    month?: string;
+    storageBytes?: number;
+    classAOps?: number;
+    classBOps?: number;
+    storageFraction?: number;
+    classAFraction?: number;
+    classBFraction?: number;
+    highestFraction?: number;
+    health?: string;
+    freeTier?: { storageBytes?: number; classAOps?: number; classBOps?: number };
+    safety?: { warnFraction?: number; conserveFraction?: number; blockFraction?: number; hardLockFraction?: number };
+    remaining?: { storageBytes?: number; classAOps?: number; classBOps?: number };
+  };
 };
 export type AuditData = { events: Array<Record<string, unknown>> };
 

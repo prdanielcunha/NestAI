@@ -34,7 +34,8 @@ import { createJob, enqueueJob, getJobForScope, getJobResult, nextAttempt, putJo
 import { buildMissionControlOverview, controlPlaneApps, controlPlaneTasks, controlPlaneProviders, controlPlanePolicies, controlPlaneAudit, controlPlaneRoutes, controlPlanePrompts, controlPlaneKnowledge, controlPlaneEvaluations, controlPlaneObservability, controlPlaneCostQuota, syncStaticControlPlane } from "../../../packages/control-plane/src/index.js";
 import { validateAppManifest, assertManifestTaskOwnership, persistAppManifest } from "../../../packages/app-manifest/src/index.js";
 import { verifyGitHubWorkloadToken } from "../../../packages/workload-auth/src/index.js";
-import { queryKnowledge, upsertKnowledge, persistKnowledgeSource, type VectorizeLike } from "../../../packages/rag/src/index.js";
+import { queryKnowledge, upsertKnowledge, persistKnowledgeSource, ragOrganizationHash, ragScopedSourceId, type VectorizeLike } from "../../../packages/rag/src/index.js";
+import { getR2Usage, putR2Object, r2Utf8Size, reconcileR2Inventory, type R2BucketLike } from "../../../packages/r2-storage/src/index.js";
 
 type RateLimiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
 
@@ -46,6 +47,7 @@ export type Env = {
   JOBS?: QueueLike<JobEnvelope>;
   JOBS_DLQ?: QueueLike<{ job: JobEnvelope; error: string }>;
   VECTORIZE?: VectorizeLike;
+  KNOWLEDGE_BUCKET?: R2BucketLike;
   GROQ_API_KEY?: string;
   GEMINI_API_KEY?: string;
   MISTRAL_API_KEY?: string;
@@ -86,7 +88,7 @@ function errorCode(error: unknown): string {
 function statusFor(code: string): number {
   if (code.startsWith("AUTH_") || code.startsWith("APP_CHECK_")) return 401;
   if (code === "TASK_NOT_REGISTERED") return 404;
-  if (code.startsWith("COST_GUARD_") || code === "RATE_LIMITED") return 429;
+  if (code.startsWith("COST_GUARD_") || code.startsWith("R2_") || code === "RATE_LIMITED") return 429;
   if (code.startsWith("PRIVACY_") || code.startsWith("OUTPUT_SCHEMA_") || code.startsWith("EVIDENCE_") || code === "ROUTER_NO_ELIGIBLE_MODEL") return 422;
   if (code === "AI_DISABLED" || code === "APP_AI_DISABLED") return 503;
   if (code === "PROVIDER_TIMEOUT") return 504;
@@ -757,6 +759,9 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         vectorize: env.VECTORIZE && env.AI_VECTORIZE_ENABLED === "true"
           ? "ready"
           : env.AI_VECTORIZE_ENABLED === "false" ? "blocked" : "unconfigured",
+        r2: env.KNOWLEDGE_BUCKET && env.AI_R2_WRITES_ENABLED === "true"
+          ? "ready"
+          : env.AI_R2_WRITES_ENABLED === "false" ? "write_locked" : "unconfigured",
       },
       providers,
     });
@@ -855,6 +860,45 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
           return vectors;
         },
       });
+      let sourcePayloadStored = false;
+      let sourceObjectKey: string | null = null;
+      let r2QuotaHealth: string | null = null;
+
+      if (env.AI_R2_WRITES_ENABLED === "true" && env.KNOWLEDGE_BUCKET) {
+        try {
+          const orgHash = await ragOrganizationHash(input.organizationId);
+          const scopedSourceId = await ragScopedSourceId(input.organizationId, input.appId, input.sourceId);
+          sourceObjectKey = "knowledge/" + orgHash + "/" + input.appId + "/" + scopedSourceId + ".txt";
+          await putR2Object(env.KNOWLEDGE_BUCKET, env.DB, {
+            key: sourceObjectKey,
+            value: input.text,
+            sizeBytes: r2Utf8Size(input.text),
+            category: "knowledge",
+            priority: "background",
+            options: {
+              httpMetadata: { contentType: "text/plain; charset=utf-8" },
+              customMetadata: {
+                appId: input.appId,
+                sensitivity: privacy.sensitivity,
+                locale: input.locale,
+              },
+            },
+          });
+          sourcePayloadStored = true;
+          r2QuotaHealth = (await getR2Usage(env.DB)).health;
+        } catch (r2Error) {
+          const r2Code = errorCode(r2Error);
+          if (!r2Code.startsWith("R2_")) throw r2Error;
+          await recordRuntimeEvent(env.DB, {
+            id: crypto.randomUUID(),
+            eventType: "r2_degraded",
+            appId: input.appId,
+            task: "rag.ingest",
+            organizationHash: await ragOrganizationHash(input.organizationId),
+          });
+        }
+      }
+
       await persistKnowledgeSource(env.DB, {
         sourceId: input.sourceId,
         appId: input.appId,
@@ -866,7 +910,8 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         metadata: {
           title: input.title ?? null,
           locatorPrefix: input.locatorPrefix ?? null,
-          sourcePayloadStored: false,
+          sourcePayloadStored,
+          sourceObjectKey,
         },
       });
       return json({
@@ -874,6 +919,10 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         sourceId: input.sourceId,
         status: "ready",
         chunks: embedded.chunks,
+        storage: {
+          r2: sourcePayloadStored ? "stored" : "degraded",
+          quotaHealth: r2QuotaHealth,
+        },
       }, 201);
     } catch (error) {
       const code = errorCode(error);
@@ -1644,6 +1693,26 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 export async function handleScheduled(_controller: unknown, env: Env): Promise<void> {
   await syncStaticControlPlane(env.DB);
   await evaluateSloAlerts(env.DB);
+
+  const now = new Date();
+  if (
+    env.AI_R2_WRITES_ENABLED === "true" &&
+    env.KNOWLEDGE_BUCKET &&
+    now.getUTCHours() === 3 &&
+    now.getUTCMinutes() < 15
+  ) {
+    try {
+      await reconcileR2Inventory(env.KNOWLEDGE_BUCKET, env.DB, now);
+    } catch (error) {
+      await recordRuntimeEvent(env.DB, {
+        id: crypto.randomUUID(),
+        eventType: "r2_reconcile_failed",
+        appId: "nestai",
+        task: "storage.reconcile",
+      }, now);
+      console.error(JSON.stringify({ code: errorCode(error), task: "storage.reconcile" }));
+    }
+  }
 }
 
 const allowedBrowserOrigins = new Set([
