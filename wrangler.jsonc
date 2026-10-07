@@ -39,7 +39,7 @@
     "APP_CHECK_REQUIRED": "true",
     "AI_CACHE_ENABLED": "true",
     "AI_JOBS_ENABLED": "true",
-    "AI_VECTORIZE_ENABLED": "false",
+    "AI_VECTORIZE_ENABLED": "true",
     "AI_R2_WRITES_ENABLED": "false",
     "AI_HUB_ENABLED": "true",
     "AI_NESTLOCAL_ENABLED": "true",
@@ -100,5 +100,11 @@
         "dead_letter_queue": "nestai-jobs-dlq"
       }
     ]
-  }
+  },
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "nestai-knowledge"
+    }
+  ]
 }
