@@ -138,6 +138,38 @@ describe("Worker API", () => {
     fetchMock.mockRestore();
   });
 
+  it("denies P2 data detected inside an otherwise P1 guest task", async () => {
+    resetHubJwksCacheForTests();
+    const { token, publicJwk } = await issueWorkerToken({
+      sub: "guest:test",
+      organizationId: "public:nestlume",
+      appId: "nestlume",
+      tokenType: "guest",
+      appCheckAppId: "1:555464791734:web:test",
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
+      keys: [publicJwk],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    const env = baseEnv();
+    env.APP_CHECK_REQUIRED = "false";
+    const response = await handleRequest(new Request("https://ai.millionsnest.com/v1/run", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        "x-millionsnest-app": "nestlume",
+      },
+      body: JSON.stringify({
+        task: "nestlume.study.answer",
+        input: "Contato pessoal: email exemplo@dominio.com; explique Provérbios.",
+        context: { organizationId: "public:nestlume", locale: "pt-BR" },
+      }),
+    }), env);
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: "AUTH_GUEST_SENSITIVITY_DENIED" });
+    fetchMock.mockRestore();
+  });
+
   it("denies guest tokens from P2 tasks even with valid signature and capability", async () => {
     resetHubJwksCacheForTests();
     const { token, publicJwk } = await issueWorkerToken({
