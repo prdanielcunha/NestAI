@@ -29,8 +29,9 @@ export type PromptGuardPolicyAction = "ALLOW" | "QUARANTINE" | "REVIEW";
 export function promptGuardPolicy(input: PromptGuardPolicyInput): PromptGuardPolicyAction {
   if (input.verdict === "benign") return "ALLOW";
   if (input.source === "retrieved") return "QUARANTINE";
-  // Prompt Guard is evidence for the Policy Engine, not an authorization
-  // authority. Potential false positives never trigger writes or tools.
-  if (input.criticalAction) return "REVIEW";
+  // Classifier outages must not remove ordinary product functionality.
+  // Critical operations still require review, while noncritical input falls
+  // back to deterministic policy checks when the classifier is uncertain.
+  if (input.verdict === "uncertain" && !input.criticalAction) return "ALLOW";
   return "REVIEW";
 }
