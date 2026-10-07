@@ -595,3 +595,16 @@ export async function applyActivePolicyOverlay<T extends { provider: string }>(
     return candidates;
   }
 }
+
+
+export async function getPromptDraftInstructions(
+  db: D1DatabaseLike,
+  promptId: string,
+  version: number,
+): Promise<DynamicPromptDraft["instructions"]> {
+  const row = await db.prepare(
+    "SELECT content_json FROM cp_prompt_versions WHERE prompt_id=?1 AND version=?2"
+  ).bind(promptId,version).first<{ content_json: string }>();
+  if (!row) throw new Error("CONTROL_PLANE_DRAFT_NOT_FOUND");
+  return validatePromptDraft(promptId, JSON.parse(row.content_json) as DynamicPromptDraft).instructions;
+}
