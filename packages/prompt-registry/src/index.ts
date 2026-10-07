@@ -198,6 +198,83 @@ export const prompts: Record<string, PromptDefinition> = {
       es: "Redacta un mensaje claro para el equipo usando solo datos reales de la escala. No cambies asistencia, función, horario ni repertorio.",
     },
   },
+  "musicscale.live.diagnostic.explain": {
+    id: "musicscale.live.diagnostic.explain",
+    taskId: "musicscale.live.diagnostic.explain",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Explique os diagnósticos fornecidos em linguagem clara. Separe fatos observados de hipóteses e sugira somente verificações seguras. Nunca execute nem afirme TAKE/ações de provider.",
+      en: "Explain the supplied diagnostics clearly. Separate observed facts from hypotheses and suggest only safe checks. Never execute or claim TAKE/provider actions.",
+      es: "Explica claramente los diagnósticos suministrados. Separa hechos observados de hipótesis y sugiere solo verificaciones seguras. Nunca ejecutes ni afirmes acciones TAKE/del proveedor.",
+    },
+  },
+  "musicscale.live.song-match.assist": {
+    id: "musicscale.live.song-match.assist",
+    taskId: "musicscale.live.song-match.assist",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Compare candidatos de identidade da música usando somente título, artista, versão, fingerprint e evidências fornecidas. Não trate candidato ambíguo como certeza.",
+      en: "Compare song identity candidates using only supplied title, artist, version, fingerprint, and evidence. Never present an ambiguous candidate as certain.",
+      es: "Compara candidatos de identidad de canción usando solo título, artista, versión, fingerprint y evidencias suministradas. No presentes un candidato ambiguo como certeza.",
+    },
+  },
+  "musicscale.live.request.classify": {
+    id: "musicscale.live.request.classify",
+    taskId: "musicscale.live.request.classify",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Classifique e deduplique solicitações de colaboração preservando a intenção original. Nunca converta uma solicitação em comando de execução.",
+      en: "Classify and deduplicate collaboration requests while preserving original intent. Never turn a request into an execution command.",
+      es: "Clasifica y deduplica solicitudes de colaboración preservando la intención original. Nunca conviertas una solicitud en comando de ejecución.",
+    },
+  },
+  "musicscale.live.search.interpret": {
+    id: "musicscale.live.search.interpret",
+    taskId: "musicscale.live.search.interpret",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Interprete a busca em linguagem natural apenas como pistas/filtros de pesquisa. Não afirme que conteúdo foi exibido e não execute TAKE.",
+      en: "Interpret natural-language search only into search hints/filters. Do not claim content was displayed and do not execute TAKE.",
+      es: "Interpreta la búsqueda en lenguaje natural solo como pistas/filtros. No afirmes que se mostró contenido ni ejecutes TAKE.",
+    },
+  },
+  "musicscale.live.metadata.normalize": {
+    id: "musicscale.live.metadata.normalize",
+    taskId: "musicscale.live.metadata.normalize",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Normalize nomes, tags e metadados preservando significado. Não invente valores ausentes.",
+      en: "Normalize names, tags, and metadata while preserving meaning. Do not invent missing values.",
+      es: "Normaliza nombres, etiquetas y metadatos preservando el significado. No inventes valores ausentes.",
+    },
+  },
+  "musicscale.live.post-service.summary": {
+    id: "musicscale.live.post-service.summary",
+    taskId: "musicscale.live.post-service.summary",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Resuma somente os fatos pós-culto/execução fornecidos. Não julgue pessoas, não infira motivos e não invente causas para eventos ausentes.",
+      en: "Summarize only supplied post-service facts. Do not judge people, infer motives, or invent causes for missing events.",
+      es: "Resume solo los hechos posteriores suministrados. No juzgues personas, infieras motivos ni inventes causas de eventos ausentes.",
+    },
+  },
+  "musicscale.live.pre-service-risk.explain": {
+    id: "musicscale.live.pre-service-risk.explain",
+    taskId: "musicscale.live.pre-service-risk.explain",
+    version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Explique apenas riscos sustentados pelos fatos de preflight/ensaio fornecidos e indique ações seguras de preparação. Não execute comandos de provider.",
+      en: "Explain only risks supported by supplied preflight/rehearsal facts and point to safe preparation actions. Do not execute provider commands.",
+      es: "Explica solo riesgos sustentados por los hechos de preflight/ensayo suministrados e indica acciones seguras de preparación. No ejecutes comandos del proveedor.",
+    },
+  },
   "nestlume.entity.explain": {
     id: "nestlume.entity.explain",
     taskId: "nestlume.entity.explain",
