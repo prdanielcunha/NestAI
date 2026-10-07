@@ -129,10 +129,12 @@ async function reserve(
   return getR2Usage(db, now);
 }
 
-async function trackedObjectSize(db: D1DatabaseLike, key: string): Promise<number> {
-  const row = await db.prepare("SELECT size_bytes FROM r2_objects WHERE object_key=?1")
-    .bind(key).first<{ size_bytes: number }>();
-  return Number(row?.size_bytes ?? 0);
+async function trackedObjectSize(db: D1DatabaseLike, key: string, now = new Date()): Promise<number> {
+  const row = await db.prepare("SELECT size_bytes,expires_at FROM r2_objects WHERE object_key=?1")
+    .bind(key).first<{ size_bytes: number; expires_at: string | null }>();
+  if (!row) return 0;
+  if (row.expires_at && Date.parse(row.expires_at) <= now.getTime()) return 0;
+  return Number(row.size_bytes ?? 0);
 }
 
 export async function putR2Object(
@@ -150,7 +152,7 @@ export async function putR2Object(
   now = new Date(),
 ): Promise<R2StoredObject> {
   if (!Number.isFinite(args.sizeBytes) || args.sizeBytes < 0) throw new Error("R2_INVALID_SIZE");
-  const previousSize = await trackedObjectSize(db, args.key);
+  const previousSize = await trackedObjectSize(db, args.key, now);
   const delta = Math.max(0, Math.floor(args.sizeBytes) - previousSize);
   await reserve(db, { storageBytes: delta, classAOps: 1 }, args.priority ?? "background", now);
   const stored = await bucket.put(args.key, args.value, args.options);
@@ -213,7 +215,7 @@ export async function deleteR2Object(
   priority: R2Priority = "background",
   now = new Date(),
 ): Promise<void> {
-  const previousSize = await trackedObjectSize(db, key);
+  const previousSize = await trackedObjectSize(db, key, now);
   await reserve(db, { classAOps: 1 }, priority, now);
   await bucket.delete(key);
   await db.prepare("DELETE FROM r2_objects WHERE object_key=?1").bind(key).run();
@@ -226,4 +228,43 @@ export async function deleteR2Object(
 
 export function r2Utf8Size(value: string): number {
   return new TextEncoder().encode(value).byteLength;
+}
+
+
+export async function reconcileR2Inventory(
+  bucket: R2BucketLike,
+  db: D1DatabaseLike,
+  now = new Date(),
+): Promise<{ objects: number; storageBytes: number; listCalls: number; health: R2QuotaHealth }> {
+  let cursor: string | undefined;
+  let storageBytes = 0;
+  let objects = 0;
+  let listCalls = 0;
+
+  do {
+    // Reconciliation is safety-critical: it may run in conserve mode to correct
+    // lifecycle deletions, but it still hard-locks before 80% of Class A quota.
+    await reserve(db, { classAOps: 1 }, "critical", now);
+    const response = await bucket.list({ limit: 1000, ...(cursor ? { cursor } : {}) }) as {
+      objects?: Array<{ key?: string; size?: number }>;
+      truncated?: boolean;
+      cursor?: string;
+    };
+    listCalls += 1;
+    for (const object of response.objects ?? []) {
+      storageBytes += Math.max(0, Number(object.size ?? 0));
+      objects += 1;
+    }
+    cursor = response.truncated && response.cursor ? response.cursor : undefined;
+  } while (cursor);
+
+  const month = utcMonth(now);
+  await db.prepare(
+    `INSERT INTO r2_usage_monthly(month,storage_bytes,class_a_ops,class_b_ops,updated_at)
+     VALUES (?1,?2,0,0,?3)
+     ON CONFLICT(month) DO UPDATE SET storage_bytes=excluded.storage_bytes,updated_at=excluded.updated_at`
+  ).bind(month, storageBytes, now.toISOString()).run();
+
+  const snapshot = await getR2Usage(db, now);
+  return { objects, storageBytes, listCalls, health: snapshot.health };
 }
