@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterTenantDocuments, queryKnowledge, upsertKnowledge } from "../../packages/rag/src/index.js";
+import { applyRerankResults, filterTenantDocuments, queryKnowledge, upsertKnowledge } from "../../packages/rag/src/index.js";
 
 describe("RAG tenant firewall", () => {
   const docs = [
@@ -83,5 +83,22 @@ describe("Vectorize RAG defense in depth", () => {
       embed: async () => { embedded = true; return [[0.1]]; },
     })).rejects.toThrow("RAG_RESTRICTED_DATA_DENIED");
     expect(embedded).toBe(false);
+  });
+});
+
+
+describe("RAG reranker safety", () => {
+  it("reorders only known candidates and preserves a deterministic fallback", () => {
+    const candidates = [
+      { text: "A", sensitivity: "P1_INTERNAL" as const, evidence: { sourceId: "a", chunkId: "a:0", score: 0.9 } },
+      { text: "B", sensitivity: "P1_INTERNAL" as const, evidence: { sourceId: "b", chunkId: "b:0", score: 0.8 } },
+      { text: "C", sensitivity: "P1_INTERNAL" as const, evidence: { sourceId: "c", chunkId: "c:0", score: 0.7 } },
+    ];
+    const result = applyRerankResults(candidates, [
+      { index: 1, score: 0.99 },
+      { index: 999, score: 1 },
+    ], 2);
+    expect(result.map((item) => item.text)).toEqual(["B","A"]);
+    expect(result[0]?.evidence.score).toBe(0.99);
   });
 });
