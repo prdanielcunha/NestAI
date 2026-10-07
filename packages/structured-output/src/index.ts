@@ -78,8 +78,8 @@ const affiliatePinSchema = z.object({
 });
 
 export const structuredContracts: Record<string, StructuredContract> = {
-  "nestlume.study.answer": {
-    id: "nestlume.study.answer.v2",
+  "nestlume.study.grounded": {
+    id: "nestlume.study.grounded.v1",
     schema: nestlumeStudySchema,
     jsonSchema: {
       type: "object", additionalProperties: false,
@@ -264,7 +264,7 @@ export function validateStructuredText(taskId: string, text: string): unknown {
 }
 
 export function verifyGroundedEvidence(taskId: string, input: unknown, output: unknown): void {
-  if (taskId !== "nestlume.study.answer") return;
+  if (taskId !== "nestlume.study.grounded") return;
   const request = input && typeof input === "object" ? input as Record<string, unknown> : {};
   const raw = Array.isArray(request.evidence) ? request.evidence : [];
   const evidenceIds = new Set(raw
