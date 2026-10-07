@@ -26,7 +26,7 @@ import { assertProviderFreeQuota, assertWithinFreeBudget } from "../../../packag
 import { safeTrace, persistTrace, recordProviderHealthSample, evaluateSloAlerts } from "../../../packages/observability/src/index.js";
 import { incrementUsage, getDimensionalUsage, incrementDimensionalUsage, recordRuntimeEvent, type D1DatabaseLike } from "../../../packages/usage-ledger/src/index.js";
 import { buildTaskPrompt } from "../../../packages/prompt-registry/src/index.js";
-import { getStructuredContract, validateStructuredText } from "../../../packages/structured-output/src/index.js";
+import { getStructuredContract, validateStructuredText, assertGroundedEvidenceInput, verifyGroundedEvidence } from "../../../packages/structured-output/src/index.js";
 import { CircuitBreaker, executeWithSafeFallback } from "../../../packages/resilience/src/index.js";
 import type { Locale } from "../../../packages/i18n/src/index.js";
 import { cacheGet, cachePut, type KvNamespaceLike } from "../../../packages/cache/src/index.js";
@@ -87,7 +87,7 @@ function statusFor(code: string): number {
   if (code.startsWith("AUTH_") || code.startsWith("APP_CHECK_")) return 401;
   if (code === "TASK_NOT_REGISTERED") return 404;
   if (code.startsWith("COST_GUARD_") || code === "RATE_LIMITED") return 429;
-  if (code.startsWith("PRIVACY_") || code.startsWith("OUTPUT_SCHEMA_") || code === "ROUTER_NO_ELIGIBLE_MODEL") return 422;
+  if (code.startsWith("PRIVACY_") || code.startsWith("OUTPUT_SCHEMA_") || code.startsWith("EVIDENCE_") || code === "ROUTER_NO_ELIGIBLE_MODEL") return 422;
   if (code === "AI_DISABLED" || code === "APP_AI_DISABLED") return 503;
   if (code === "PROVIDER_TIMEOUT") return 504;
   return 500;
@@ -530,6 +530,7 @@ async function executeJobEnvelope(env: Env, job: JobEnvelope): Promise<unknown> 
   };
 
   if (task.modality === "text") {
+    assertGroundedEvidenceInput(task.id, job.payload);
     const structured = getStructuredContract(task.id);
     const candidates = await safeCandidates(env, prepared, "text", structured !== null);
     const prompt = buildTaskPrompt({ taskId: task.id, locale: job.locale, input: job.payload });
@@ -552,7 +553,9 @@ async function executeJobEnvelope(env: Env, job: JobEnvelope): Promise<unknown> 
         );
       },
     });
-    return validateStructuredText(task.id, execution.result.text);
+    const result = validateStructuredText(task.id, execution.result.text);
+    verifyGroundedEvidence(task.id, job.payload, result);
+    return result;
   }
 
   if (task.modality === "audio") {
@@ -1512,6 +1515,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       throw new Error("PRIVACY_RESTRICTED_EXTERNAL_BLOCK");
     }
 
+    assertGroundedEvidenceInput(task.id, parsed.input);
     const structuredContract = getStructuredContract(task.id);
     const locale = (parsed.context.locale ?? claims.locale ?? "pt-BR") as Locale;
     const prompt = buildTaskPrompt({ taskId: task.id, locale, input: parsed.input });
@@ -1589,6 +1593,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     let result: unknown;
     try {
       result = validateStructuredText(task.id, execution.result.text);
+      verifyGroundedEvidence(task.id, parsed.input, result);
     } catch (error) {
       outputValidation = "failed";
       throw error;
