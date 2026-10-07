@@ -19,6 +19,10 @@ import {
   extractDocumentsTextWithCloudflare,
   embedWithCloudflare,
   generateImageWithCloudflare,
+  probeGroq,
+  probeGemini,
+  probeMistral,
+  type ProviderProbeResult,
   type GenerateRequest,
   type GenerateResult,
   type WorkersAiBinding,
@@ -147,6 +151,51 @@ function availableProviders(env: Env): string[] {
     if (env.GROQ_API_KEY) result.push("groq");
     if (env.GEMINI_API_KEY) result.push("gemini");
     if (env.MISTRAL_API_KEY) result.push("mistral");
+  }
+  return result;
+}
+
+async function providerSecretFingerprint(secret: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
+  return Array.from(new Uint8Array(digest))
+    .slice(0, 8)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function cachedProviderProbe(
+  env: Env,
+  provider: "groq" | "gemini" | "mistral",
+): Promise<ProviderProbeResult> {
+  const secret =
+    provider === "groq" ? env.GROQ_API_KEY :
+    provider === "gemini" ? env.GEMINI_API_KEY :
+    env.MISTRAL_API_KEY;
+
+  if (!secret) return { provider, state: "unconfigured" };
+  const fingerprint = await providerSecretFingerprint(secret);
+  const cacheKey = "provider-probe:v2:" + provider + ":" + fingerprint;
+
+  if (env.CACHE) {
+    const cached = await env.CACHE.get(cacheKey);
+    if (cached) {
+      try {
+        return JSON.parse(cached) as ProviderProbeResult;
+      } catch {
+        await env.CACHE.delete(cacheKey);
+      }
+    }
+  }
+
+  const result =
+    provider === "groq" ? await probeGroq(secret) :
+    provider === "gemini" ? await probeGemini(secret) :
+    await probeMistral(secret);
+
+  if (env.CACHE) {
+    await env.CACHE.put(cacheKey, JSON.stringify(result), {
+      expirationTtl: result.state === "ready" ? 21_600 : 3_600,
+    });
   }
   return result;
 }
@@ -765,6 +814,20 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
           : env.AI_R2_WRITES_ENABLED === "false" ? "write_locked" : "unconfigured",
       },
       providers,
+    });
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/health/providers") {
+    const [groq, gemini, mistral] = await Promise.all([
+      cachedProviderProbe(env, "groq"),
+      cachedProviderProbe(env, "gemini"),
+      cachedProviderProbe(env, "mistral"),
+    ]);
+    return json({
+      ok: true,
+      service: "nestai",
+      billingMode: env.AI_BILLING_MODE,
+      probes: { groq, gemini, mistral },
     });
   }
 
