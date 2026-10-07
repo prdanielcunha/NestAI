@@ -73,6 +73,13 @@ try {
     indexes=listArray(json(["vectorize","list","--json"]));
   }
   if(indexes.some((x)=>x.name==="nestai-knowledge")){
+    const indexedProperties = ["appId","organizationHash","locale","sensitivity"];
+    for (const propertyName of indexedProperties) {
+      createIfMissing([
+        "vectorize","create-metadata-index","nestai-knowledge",
+        "--property-name="+propertyName,"--type=string",
+      ], "VECTORIZE_METADATA_"+propertyName.toUpperCase());
+    }
     config.vectorize=[{binding:"VECTORIZE",index_name:"nestai-knowledge"}];
     vectorizeReady=true;
   }
