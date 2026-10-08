@@ -10,8 +10,8 @@ describe('NestAI provider money budgets (still OFF in production)',()=>{
   const v=await budgetWindowsForRequest(input);
   expect(v.map(x=>x.type)).toEqual(
     ['global','environment','provider','task','app','organization']);
-  expect(v[0].key).toBe('nestai:budget:global:all');
-  expect(v[5].key).not.toContain('org-test-abc');
+  expect(v[0]!.key).toBe('nestai:budget:global:all');
+  expect(v[5]!.key).not.toContain('org-test-abc');
  });
  it('adds separately bounded users and trial scopes without leaking ids',async()=>{
   const v=await budgetWindowsForRequest({...input,userId:'user-private-abc',trial:true});
