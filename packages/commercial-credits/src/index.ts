@@ -193,11 +193,24 @@ export async function getCreditBalance(db: CommercialDatabase, args: CreditConte
     "COALESCE(SUM(reserved_credits),0) AS reserved, COALESCE(SUM(consumed_credits),0) AS consumed " +
     "FROM ai_credit_grants WHERE organization_hash=?1 AND app_id=?2 AND begins_at<=?3 AND expires_at>?3"
   ).bind(org, appId, at.toISOString()).first<{available:number;reserved:number;consumed:number}>();
+  const detail = await db.prepare(
+    "SELECT source,expires_at,total_credits,consumed_credits,reserved_credits, " +
+    "(total_credits-consumed_credits-reserved_credits) AS available " +
+    "FROM ai_credit_grants WHERE organization_hash=?1 AND app_id=?2 " +
+    "AND begins_at<=?3 AND expires_at>?3 ORDER BY expires_at,grant_id"
+  ).bind(org,appId,at.toISOString()).all<{
+    source:CreditSource;expires_at:string;total_credits:number;consumed_credits:number;
+    reserved_credits:number;available:number;
+  }>();
   return {
     appId,
     available: Number(row?.available ?? 0),
     reserved: Number(row?.reserved ?? 0),
     consumed: Number(row?.consumed ?? 0),
+    grants:(detail.results??[]).map((grant)=>({
+      source:grant.source,expiresAt:grant.expires_at,total:grant.total_credits,
+      available:grant.available,reserved:grant.reserved_credits,consumed:grant.consumed_credits,
+    })),
     asOf: at.toISOString(),
   };
 }
