@@ -81,7 +81,7 @@ BEGIN SELECT RAISE(ABORT, 'AI_CREDIT_GRANT_IMMUTABLE'); END;
 CREATE TRIGGER IF NOT EXISTS ai_credit_allocation_guard
 BEFORE INSERT ON ai_credit_allocations
 BEGIN
-  SELECT CASE WHEN NOT EXISTS (
+  SELECT (CASE WHEN NOT EXISTS (
     SELECT 1 FROM ai_credit_reservations r JOIN ai_credit_grants g
     WHERE r.reservation_id = NEW.reservation_id
       AND g.grant_id = NEW.grant_id
@@ -89,7 +89,7 @@ BEGIN
       AND r.state = 'pending'
       AND g.begins_at <= r.created_at AND g.expires_at > r.created_at
       AND g.total_credits - g.consumed_credits - g.reserved_credits >= NEW.reserved_credits
-  ) THEN RAISE(ABORT, 'AI_CREDIT_GRANT_NOT_AVAILABLE') END;
+  ) THEN RAISE(ABORT, 'AI_CREDIT_GRANT_NOT_AVAILABLE') END);
 END;
 
 CREATE TRIGGER IF NOT EXISTS ai_credit_allocation_reserve
@@ -110,21 +110,21 @@ CREATE TRIGGER IF NOT EXISTS ai_credit_reservation_status_guard
 BEFORE UPDATE OF state ON ai_credit_reservations
 WHEN NEW.state <> OLD.state
 BEGIN
-  SELECT CASE WHEN
+  SELECT (CASE WHEN
     (OLD.state = 'pending' AND NEW.state <> 'reserved') OR
     (OLD.state = 'reserved' AND NEW.state NOT IN ('settled','released')) OR
     OLD.state IN ('settled','released')
-  THEN RAISE(ABORT, 'AI_CREDIT_INVALID_TRANSITION') END;
-  SELECT CASE WHEN NEW.state = 'reserved' AND
+  THEN RAISE(ABORT, 'AI_CREDIT_INVALID_TRANSITION') END);
+  SELECT (CASE WHEN NEW.state = 'reserved' AND
     (SELECT COALESCE(SUM(reserved_credits),0) FROM ai_credit_allocations
      WHERE reservation_id = NEW.reservation_id) <> NEW.max_charge
-  THEN RAISE(ABORT, 'AI_CREDIT_RESERVATION_INCOMPLETE') END;
-  SELECT CASE WHEN NEW.state = 'settled' AND
+  THEN RAISE(ABORT, 'AI_CREDIT_RESERVATION_INCOMPLETE') END);
+  SELECT (CASE WHEN NEW.state = 'settled' AND
     (SELECT COALESCE(SUM(consumed_credits),0) FROM ai_credit_allocations
      WHERE reservation_id = NEW.reservation_id) <> NEW.actual_charge
-  THEN RAISE(ABORT, 'AI_CREDIT_SETTLEMENT_INCOMPLETE') END;
-  SELECT CASE WHEN NEW.state = 'released' AND NEW.actual_charge <> 0
-  THEN RAISE(ABORT, 'AI_CREDIT_RELEASE_WITH_CHARGE') END;
+  THEN RAISE(ABORT, 'AI_CREDIT_SETTLEMENT_INCOMPLETE') END);
+  SELECT (CASE WHEN NEW.state = 'released' AND NEW.actual_charge <> 0
+  THEN RAISE(ABORT, 'AI_CREDIT_RELEASE_WITH_CHARGE') END);
 END;
 
 CREATE TRIGGER IF NOT EXISTS ai_credit_reservation_finalized
