@@ -142,7 +142,22 @@ export type PoliciesData = {
     extraBlockedProviders?: string[];
   };
 };
+export type FreeCapacityAdvice = {
+  provider: string;
+  usageCalls: number;
+  freeHardLimit: number;
+  sharedLimit: number;
+  remaining: number;
+  health: "healthy" | "watch" | "degraded" | "critical" | "unverified";
+  quota: "healthy" | "watch" | "reserve" | "exhausted";
+  recommendation: "continue_monitoring" | "validate_health" | "defer_background" | "stop_at_free_limit";
+  reason: string;
+  advisoryOnly: true;
+  automaticRerouting: false;
+  paidFallback: false;
+};
 export type CostData = {
+  freeCapacityAdvisory?: FreeCapacityAdvice[];
   day?: string;
   actualSpendBrl?: number;
   paidProvidersLocked?: boolean;
