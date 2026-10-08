@@ -18,6 +18,7 @@ export type RunTaskRequest = {
   task: string;
   input: unknown;
   requestId?: string;
+  idempotencyKey?: string;
 };
 
 export type RunTaskResponse<TResult = unknown> = {
@@ -30,6 +31,7 @@ export type RunTaskResponse<TResult = unknown> = {
     cached: boolean;
     fallbackUsed: boolean;
     retries: number;
+    creditsCharged?: number;
   };
 };
 
@@ -158,7 +160,7 @@ export class NestAiClient {
     return body.token;
   }
 
-  private async headers(requestId?: string): Promise<Record<string, string>> {
+  private async headers(requestId?: string, idempotencyKey?: string): Promise<Record<string, string>> {
     const [token, appCheckToken] = await Promise.all([this.nestAiToken(), this.appCheckToken()]);
     return {
       authorization: "Bearer " + token,
@@ -166,6 +168,7 @@ export class NestAiClient {
       "x-millionsnest-app": this.options.appId,
       ...(appCheckToken ? { "x-firebase-appcheck": appCheckToken } : {}),
       ...(requestId ? { "x-request-id": requestId } : {}),
+      ...(idempotencyKey || requestId ? { "idempotency-key": idempotencyKey ?? requestId! } : {}),
     };
   }
 
@@ -186,7 +189,7 @@ export class NestAiClient {
   ): Promise<RunTaskResponse<TResult>> {
     const response = await this.fetcher(new URL(endpoint, this.baseUrl), {
       method: "POST",
-      headers: await this.headers(request.requestId),
+      headers: await this.headers(request.requestId, request.idempotencyKey),
       body: this.body(request),
     });
     const body = await response.json() as RunTaskResponse<TResult> & { error?: string; requestId?: string };
@@ -195,7 +198,38 @@ export class NestAiClient {
   }
 
   async run<TResult = unknown>(request: RunTaskRequest): Promise<RunTaskResponse<TResult>> {
-    return this.postTask<TResult>("run", request);
+    // Each logical operation has an idempotency key even when the caller does not supply one.
+    // For retries after an uncertain network outcome, callers should persist and reuse this key.
+    return this.postTask<TResult>("run", {
+      ...request,
+      idempotencyKey: request.idempotencyKey ?? request.requestId ?? crypto.randomUUID(),
+    });
+  }
+
+  /** Commercial credit APIs are opt-in; Hub remains the billing source of truth. */
+  async quoteCredits(task: string): Promise<{
+    quote: {creditsEstimate:number;maxCharge:number;priceVersion:number;requiresConfirmation:boolean;description:string};
+    balance: {available:number;reserved:number;consumed:number;asOf:string;grants:Array<{source:string;expiresAt:string;total:number;available:number;reserved:number;consumed:number}>};
+  }> {
+    const response = await this.fetcher(new URL("credits/quote",this.baseUrl),{
+      method:"POST",headers:await this.headers(),
+      body:JSON.stringify({task,context:{organizationId:this.organizationId(),locale:this.options.locale??"pt-BR"}}),
+    });
+    const result=await response.json() as {error?:string;requestId?:string;
+      quote:{creditsEstimate:number;maxCharge:number;priceVersion:number;requiresConfirmation:boolean;description:string};
+      balance:{available:number;reserved:number;consumed:number;asOf:string;grants:Array<{source:string;expiresAt:string;total:number;available:number;reserved:number;consumed:number}>}};
+    if(!response.ok)throw new NestAiError(result.error??"SDK_QUOTE_FAILED",response.status,result.requestId);
+    return result;
+  }
+
+  async creditBalance(): Promise<{available:number;reserved:number;consumed:number;asOf:string;grants:Array<{source:string;expiresAt:string;total:number;available:number;reserved:number;consumed:number}>}> {
+    const headers=await this.headers();
+    headers["x-millionsnest-org"]=this.organizationId();
+    const response=await this.fetcher(new URL("credits/balance",this.baseUrl),{headers});
+    const result=await response.json() as {error?:string;requestId?:string;
+      available:number;reserved:number;consumed:number;asOf:string;grants:Array<{source:string;expiresAt:string;total:number;available:number;reserved:number;consumed:number}>};
+    if(!response.ok)throw new NestAiError(result.error??"SDK_BALANCE_FAILED",response.status,result.requestId);
+    return result;
   }
 
   async *stream(request: RunTaskRequest): AsyncGenerator<StreamEvent> {

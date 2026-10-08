@@ -94,3 +94,24 @@ Consulta direta aos oito repositórios em GitHub (branches `main` e `production`
 | NestLume | `src/lib/nestai-client.ts` para estudo com evidência e guest | Igual | Resposta fundamentada E2E, App Check e privacidade de texto colado |
 
 **Automatização adicionada em branch de revisão:** `scripts/audit-ecosystem-cutover.mjs` + `tests/audit-ecosystem-cutover.test.mjs` + workflow manual `audit-ecosystem-cutover.yml`. O script compara manifests de produção, tarefas/ownership, SDK imutável e divergência de branches sem executar IA ou modificar dados. Ele sempre apresenta `liveE2E: NOT_CERTIFIED_BY_THIS_AUDIT`. A promoção exige QA e smoke autenticado separado.
+
+
+## 08/10/2026 — Extensão comercial v2 (branch em review, sem produção)
+
+**Fonte:** `02_NestAI_Creditos_Trial_Pago_Escala_Multicliente.docx`.
+**Decisões e gates:** `docs/COMMERCIAL_CREDITS_V2.md`.
+**PR:** https://github.com/prdanielcunha/NestAI/pull/20 (draft).
+
+| Camada | Estado | Prova / restante |
+| --- | --- | --- |
+| Entidades D1 de grants/ledger/custo e triggers de reserva | IMPLEMENTED IN PR ONLY | `migrations/0008_commercial_credits.sql`; script SQLite de invariantes |
+| API quote/balance/grant e SDK | IMPLEMENTED IN PR ONLY | Flag desligada; validação CI/contratos |
+| NestLocal texto metered com settle/refund | IMPLEMENTED IN PR ONLY | Hub claim e testes E2E pendentes |
+| Hub trial sem cartão e Stripe sem trial | BLOCKED | Hub PR https://github.com/prdanielcunha/millionsnest/pull/287; onboarding/checkout/webhooks pendentes |
+| OCR/áudio/import/jobs/streaming metered | BLOCKED | Preço comercial testável existe, E2E e budgets pendentes |
+| Custo real e paid provider financeiro com hard stop | BLOCKED | Schema D1; reserva e reconciliação USD ainda não implementadas |
+| MusicScale/7 outros apps preservados | NOT MODIFIED | Testes live/legado e migração progressiva pendentes |
+| Publicação/cobrança Founders | NOT AUTHORIZED | COGS, preço, simulação 1k tenants, flags e canary |
+
+Não alterar `DONE` das fases antigas por causa deste PR: esse trabalho
+adiciona fundação comercial desligada e não é comprovação de rollout real.

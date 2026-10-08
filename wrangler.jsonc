@@ -25,6 +25,7 @@
     "ALLOW_PAID_FALLBACK": "false",
     "AUTO_UPGRADE_PROVIDER": "false",
     "AI_PAID_ENABLED": "false",
+    "AI_COMMERCIAL_CREDITS_ENABLED": "false",
     "HUB_TOKEN_ISSUER": "https://millionsnest.com",
     "NESTAI_TOKEN_AUDIENCE": "nestai",
     "HUB_JWKS_URL": "https://www.millionsnest.com/api/v1/ai/jwks",
