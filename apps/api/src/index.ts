@@ -47,6 +47,7 @@ import { queryKnowledge, upsertKnowledge, persistKnowledgeSource, ragOrganizatio
 import { getR2Usage, putR2Object, r2Utf8Size, reconcileR2Inventory, type R2BucketLike } from "../../../packages/r2-storage/src/index.js";
 import { assertEvalTargetAllowed } from "../../../packages/evaluation-lab/src/index.js";
 import { assertFreeSyntheticEvalInput } from "../../../packages/evaluation-lab/src/free-only-eval.js";
+import { assertCommercialEntitlement, quoteNestLocalTask, grantCredits, getCreditBalance, reserveCredits, finalizeCredits, releaseStaleReservations, recordProviderCost, sha256, type CreditReservation, type CommercialDatabase } from "../../../packages/commercial-credits/src/index.js";
 
 type RateLimiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
 
@@ -74,6 +75,7 @@ export type Env = {
   AI_ALL_ENABLED: "true" | "false";
   AI_EXTERNAL_PROVIDERS_ENABLED: "true" | "false";
   AI_PAID_ENABLED: "false";
+  AI_COMMERCIAL_CREDITS_ENABLED?: "true" | "false";
   AI_TOOLS_WRITE_ENABLED: "true" | "false";
   AI_CONNECT_ENABLED?: "true" | "false";
   AI_FINANCE_ENABLED?: "true" | "false";
@@ -104,7 +106,12 @@ function errorCode(error: unknown): string {
 
 function statusFor(code: string): number {
   if (code.startsWith("AUTH_") || code.startsWith("APP_CHECK_")) return 401;
-  if (code === "TASK_NOT_REGISTERED") return 404;
+  if (code === "TASK_NOT_REGISTERED" || code === "AI_CREDIT_RESERVATION_NOT_FOUND") return 404;
+  if (code === "AI_INPUT_TOO_LARGE") return 413;
+  if (code === "AI_MONTHLY_CREDITS_EXHAUSTED" || code === "AI_TRIAL_CREDITS_EXHAUSTED") return 402;
+  if (code.includes("IDEMPOTENCY") || code.includes("REPLAY") || code.includes("FINALIZATION_CONFLICT")) return 409;
+  if (code === "TRIAL_EXPIRED" || code.startsWith("AI_HUB_ENTITLEMENT_")) return 403;
+  if (code.startsWith("AI_CREDIT_") || code === "AI_CREDITS_NOT_ENABLED") return 422;
   if (code.startsWith("COST_GUARD_") || code.startsWith("R2_") || code === "RATE_LIMITED") return 429;
   if (code.startsWith("PRIVACY_") || code.startsWith("PROMPT_GUARD_") || code.startsWith("OUTPUT_SCHEMA_") || code.startsWith("EVIDENCE_") || code === "ROUTER_NO_ELIGIBLE_MODEL") return 422;
   if (code === "AI_DISABLED" || code === "APP_AI_DISABLED") return 503;
@@ -299,6 +306,13 @@ async function authenticateRequest(args: {
     expectedAppId: args.task.app,
   });
   requireCapability(claims, args.task.capability);
+
+  // A new credit policy can only meter certified NestLocal text /run calls.
+  // Other entry points fail closed instead of quietly providing unmetered paid features.
+  if (args.env.AI_COMMERCIAL_CREDITS_ENABLED === "true" && args.task.app === "nestlocal" &&
+      !["/v1/run", "/v1/credits/quote"].includes(new URL(args.request.url).pathname)) {
+    throw new Error("AI_CREDIT_TASK_UNCERTIFIED");
+  }
 
   if (claims.tokenType === "guest") {
     if (claims.organizationId !== "public:" + args.task.app) throw new Error("AUTH_GUEST_TENANT_DENIED");
@@ -988,6 +1002,80 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       const code = errorCode(error);
       const status = code.startsWith("WORKLOAD_") ? 401 : code.startsWith("APP_MANIFEST_") ? 422 : 400;
       return json({ requestId, error: code }, status);
+    }
+  }
+
+  if (url.pathname === "/v1/credits/balance" && request.method === "GET") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    try {
+      if (env.AI_COMMERCIAL_CREDITS_ENABLED !== "true") throw new Error("AI_CREDITS_NOT_ENABLED");
+      const claims = await authenticateScopedRequest(request, env);
+      if (claims.appId !== "nestlocal" || claims.tokenType === "guest") throw new Error("AUTH_CAPABILITY_DENIED");
+      assertCommercialEntitlement(claims.aiEntitlement, claims.appId);
+      const balance = await getCreditBalance(env.DB as CommercialDatabase, {
+        organizationId: claims.organizationId, appId: claims.appId,
+      });
+      return json({requestId,...balance});
+    } catch(error) {
+      const code=errorCode(error);
+      return json({requestId,error:code},statusFor(code));
+    }
+  }
+
+  if (url.pathname === "/v1/credits/quote" && request.method === "POST") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    try {
+      if (env.AI_COMMERCIAL_CREDITS_ENABLED !== "true") throw new Error("AI_CREDITS_NOT_ENABLED");
+      const body = await request.json() as { task?: string; context?: { organizationId?: string } };
+      const task = getTask(String(body.task??""));
+      if (task.app !== "nestlocal" || task.modality !== "text") throw new Error("AI_CREDIT_TASK_UNCERTIFIED");
+      if (!body.context?.organizationId) throw new Error("AUTH_TENANT_REQUIRED");
+      const claims = await authenticateRequest({
+        request,env,task,organizationId:body.context.organizationId,
+      });
+      assertCommercialEntitlement(claims.aiEntitlement, task.app);
+      const quote = quoteNestLocalTask(task.id);
+      const balance = await getCreditBalance(env.DB as CommercialDatabase,{
+        organizationId: claims.organizationId, appId: task.app,
+      });
+      return json({requestId,quote,balance});
+    } catch(error) {
+      const code=errorCode(error);
+      return json({requestId,error:code},statusFor(code));
+    }
+  }
+
+  if (url.pathname === "/v1/credits/grants" && request.method === "POST") {
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    try {
+      if (env.AI_COMMERCIAL_CREDITS_ENABLED !== "true") throw new Error("AI_CREDITS_NOT_ENABLED");
+      const org = request.headers.get("x-millionsnest-org");
+      const app = request.headers.get("x-millionsnest-app");
+      const bearer = request.headers.get("authorization");
+      if (!org || app !== "nestlocal" || !bearer?.startsWith("Bearer ")) throw new Error("AUTH_GRANT_SERVICE_REQUIRED");
+      const token = bearer.slice(7);
+      const claims = await verifyNestAiToken(token,{
+        issuer:env.HUB_TOKEN_ISSUER,audience:env.NESTAI_TOKEN_AUDIENCE,
+        publicJwk:await resolveHubPublicJwk(token,env),expectedOrganizationId:org,expectedAppId:app,
+      });
+      if (claims.tokenType !== "service" || !claims.capabilities.includes("ai:credits.grant") ||
+          !claims.scopes?.includes("credits:grant")) throw new Error("AUTH_GRANT_SERVICE_REQUIRED");
+      const body = await request.json() as {
+        source?: string; sourceRef?: string; grantVersion?: number; amount?: number;
+        beginsAt?: string; expiresAt?: string;
+      };
+      // No browser/client can create a grant. Hub owns trial/billing and signs this command.
+      if (!body.source || !["trial","plan","addon","legacy"].includes(body.source)) throw new Error("AI_CREDIT_INVALID_SOURCE");
+      const result=await grantCredits(env.DB as CommercialDatabase,{
+        organizationId:claims.organizationId,appId:claims.appId,
+        source:body.source as "trial"|"plan"|"addon"|"legacy",
+        sourceRef:String(body.sourceRef??""),grantVersion:Number(body.grantVersion),
+        amount:Number(body.amount),beginsAt:String(body.beginsAt??""),expiresAt:String(body.expiresAt??""),
+      });
+      return json({requestId,...result},result.created?201:200);
+    } catch(error) {
+      const code=errorCode(error);
+      return json({requestId,error:code},statusFor(code));
     }
   }
 
@@ -2109,6 +2197,8 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
   const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
   const started = Date.now();
+  let creditHold: CreditReservation | null = null;
+  let creditContext: { organizationId: string; appId: string } | null = null;
 
   try {
     const raw = await request.json();
@@ -2121,6 +2211,8 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     if (!organizationId) throw new Error("AUTH_TENANT_REQUIRED");
 
     const claims = await authenticateRequest({ request, env, task, organizationId });
+    const creditPolicyApplies = env.AI_COMMERCIAL_CREDITS_ENABLED === "true" && task.app === "nestlocal";
+    if (creditPolicyApplies) assertCommercialEntitlement(claims.aiEntitlement, task.app);
 
     const rate = await env.AI_RATE_LIMITER.limit({ key: claims.organizationId + ":" + claims.sub });
     if (!rate.success) {
@@ -2189,6 +2281,29 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
     const quotaCandidates = await quotaEligibleCandidates(env, claims, task, organizationId, candidates);
 
+    if (creditPolicyApplies) {
+      const quote = quoteNestLocalTask(task.id);
+      const idempotencyKey = request.headers.get("idempotency-key");
+      if (!idempotencyKey) throw new Error("AI_CREDIT_IDEMPOTENCY_REQUIRED");
+      const requestHash = await sha256(JSON.stringify({task:task.id,input:parsed.input,locale}));
+      const reserved = await reserveCredits(env.DB as CommercialDatabase,{
+        organizationId,appId:task.app,taskId:task.id,
+        idempotencyKey,requestHash,maxCharge:quote.maxCharge,priceVersion:quote.priceVersion,
+      }).catch((error: unknown) => {
+        // Trial credit exhaustion must not imply the seven-day functional trial ended.
+        if (errorCode(error) === "AI_MONTHLY_CREDITS_EXHAUSTED" &&
+            claims.aiEntitlement?.accessState === "trial_active") {
+          throw new Error("AI_TRIAL_CREDITS_EXHAUSTED");
+        }
+        throw error;
+      });
+      if (reserved.replayed) throw new Error(
+        reserved.state === "settled" ? "AI_CREDIT_IDEMPOTENT_REPLAY" : "AI_CREDIT_REQUEST_IN_PROGRESS"
+      );
+      creditHold = reserved;
+      creditContext = {organizationId,appId:task.app};
+    }
+
     const execution = await executeWithSafeFallback({
       candidates: quotaCandidates,
       keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
@@ -2219,6 +2334,22 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       throw error;
     }
 
+    // A valid result settles the commercial charge before noncritical trace/cache work.
+    if (creditHold && creditContext) {
+      await finalizeCredits(env.DB as CommercialDatabase,{
+        ...creditContext,reservationId:creditHold.reservationId,
+        success:true,actualCharge:creditHold.maxCharge,
+      });
+      creditHold = null;
+    }
+    await recordProviderCost(env.DB as CommercialDatabase,{
+      organizationId,appId:task.app,taskId:task.id,requestRef:requestId,
+      providerId:execution.result.provider,modelId:execution.result.model,
+      ...(execution.result.usage?.inputTokens !== undefined ? {tokensIn:execution.result.usage.inputTokens} : {}),
+      ...(execution.result.usage?.outputTokens !== undefined ? {tokensOut:execution.result.usage.outputTokens} : {}),
+      // Until verified account-level billing data exists, actual provider cost is unknown (NULL).
+      actualMicroUsd:null,estimateMicroUsd:null,
+    }).catch((error) => console.error(JSON.stringify({requestId,code:errorCode(error),stage:"cost_record"})));
     await cachePut(env.CACHE, cacheContext, task.cache.mode, task.cache.ttlSeconds, result);
 
     const trace = await safeTrace({
@@ -2252,9 +2383,15 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         cached: false,
         fallbackUsed: execution.fallbackUsed,
         retries: execution.retries,
+        ...(creditPolicyApplies ? { creditsCharged: 1 } : {}),
       },
     });
   } catch (error) {
+    if (creditHold && creditContext) {
+      await finalizeCredits(env.DB as CommercialDatabase,{
+        ...creditContext,reservationId:creditHold.reservationId,success:false,actualCharge:0,
+      }).catch((rollbackError)=>console.error(JSON.stringify({requestId,code:errorCode(rollbackError),stage:"credit_release"})));
+    }
     const code = errorCode(error);
     console.error(JSON.stringify({ requestId, code, durationMs: Date.now() - started }));
     return json({ requestId, error: code }, statusFor(code));
@@ -2264,6 +2401,10 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 export async function handleScheduled(_controller: unknown, env: Env): Promise<void> {
   await syncStaticControlPlane(env.DB);
   await evaluateSloAlerts(env.DB);
+  if (env.AI_COMMERCIAL_CREDITS_ENABLED === "true") {
+    await releaseStaleReservations(env.DB as CommercialDatabase).catch((error)=>
+      console.error(JSON.stringify({code:errorCode(error),task:"credits.release_stale"})));
+  }
 
   const now = new Date();
   if (
@@ -2312,7 +2453,7 @@ export async function handleBrowserRequest(request: Request, env: Env): Promise<
       headers: {
         "access-control-allow-origin": origin,
         "access-control-allow-methods": "GET, POST, OPTIONS",
-        "access-control-allow-headers": "authorization, content-type, accept, x-firebase-appcheck, x-millionsnest-app, x-millionsnest-org, x-request-id",
+        "access-control-allow-headers": "authorization, content-type, accept, x-firebase-appcheck, x-millionsnest-app, x-millionsnest-org, x-request-id, idempotency-key",
         "access-control-max-age": "600",
         "vary": "Origin",
         "cache-control": "no-store",
