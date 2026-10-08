@@ -47,7 +47,7 @@ import { queryKnowledge, upsertKnowledge, persistKnowledgeSource, ragOrganizatio
 import { getR2Usage, putR2Object, r2Utf8Size, reconcileR2Inventory, type R2BucketLike } from "../../../packages/r2-storage/src/index.js";
 import { assertEvalTargetAllowed } from "../../../packages/evaluation-lab/src/index.js";
 import { assertFreeSyntheticEvalInput } from "../../../packages/evaluation-lab/src/free-only-eval.js";
-import { assertCommercialEntitlement, quoteNestLocalTask, grantCredits, getCreditBalance, reserveCredits, finalizeCredits, releaseStaleReservations, recordProviderCost, sha256, type CreditReservation, type CommercialDatabase } from "../../../packages/commercial-credits/src/index.js";
+import { assertCommercialEntitlement, quoteNestLocalTask, grantCredits, revokePaidCredits, getCreditBalance, reserveCredits, finalizeCredits, releaseStaleReservations, recordProviderCost, sha256, type CreditReservation, type CommercialDatabase } from "../../../packages/commercial-credits/src/index.js";
 
 type RateLimiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
 
@@ -1074,6 +1074,42 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       });
       return json({requestId,...result},result.created?201:200);
     } catch(error) {
+      const code=errorCode(error);
+      return json({requestId,error:code},statusFor(code));
+    }
+  }
+
+  /** Revoke unused paid credits after Stripe refund or chargeback. This is
+   * service-to-service only; the original grant and consumption history stay
+   * immutable for financial audit.
+   */
+  if(url.pathname==="/v1/credits/grants/revoke" && request.method==="POST"){
+    const requestId=request.headers.get("x-request-id")||crypto.randomUUID();
+    try{
+      if(env.AI_COMMERCIAL_CREDITS_ENABLED!=="true")throw Error("AI_CREDITS_NOT_ENABLED");
+      const org=request.headers.get("x-millionsnest-org");
+      const app=request.headers.get("x-millionsnest-app");
+      const bearer=request.headers.get("authorization");
+      if(!org||app!=="nestlocal"||!bearer?.startsWith("Bearer "))
+        throw Error("AUTH_GRANT_SERVICE_REQUIRED");
+      const token=bearer.slice(7);
+      const claims=await verifyNestAiToken(token,{
+        issuer:env.HUB_TOKEN_ISSUER,audience:env.NESTAI_TOKEN_AUDIENCE,
+        publicJwk:await resolveHubPublicJwk(token,env),
+        expectedOrganizationId:org,expectedAppId:app,
+      });
+      if(claims.tokenType!=="service"||
+        !claims.capabilities.includes("ai:credits.revoke")||
+        !claims.scopes?.includes("credits:revoke"))
+        throw Error("AUTH_GRANT_SERVICE_REQUIRED");
+      const body=await request.json() as {sourceRef?:unknown;reason?:unknown};
+      const result=await revokePaidCredits(env.DB as CommercialDatabase,{
+        organizationId:claims.organizationId,appId:claims.appId,
+        sourceRef:String(body.sourceRef??""),
+        reason:String(body.reason??"") as "refund"|"dispute"|"chargeback"|"billing_correction",
+      });
+      return json({requestId,...result},200);
+    }catch(error){
       const code=errorCode(error);
       return json({requestId,error:code},statusFor(code));
     }
