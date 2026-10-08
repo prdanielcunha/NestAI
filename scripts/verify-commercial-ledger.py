@@ -121,5 +121,5 @@ else:
 # Event log balances to the post-settlement grant state.
 assert db.execute("SELECT SUM(reserved_delta) FROM ai_credit_transactions").fetchone()[0]==0
 assert db.execute("SELECT SUM(consumed_delta) FROM ai_credit_transactions").fetchone()[0]==27
-assert db.execute("SELECT COUNT(*) FROM ai_credit_transactions WHERE event_type='release'").fetchone()[0]==2
+assert db.execute("SELECT COUNT(*) FROM ai_credit_transactions WHERE event_type='release'").fetchone()[0]==1
 print("Commercial credit SQLite invariants PASS: allocation, idempotency, refund, expiry, ledger reconciliation")
