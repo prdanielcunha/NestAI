@@ -8,7 +8,7 @@ db.execute("PRAGMA foreign_keys=ON")
 migration_bytes = Path("migrations/0008_commercial_credits.sql").read_bytes()
 # Wrangler/D1's remote migration splitter is sensitive to CRLF and to
 # unparenthesized SELECT CASE ... END inside trigger bodies.
-assert b"\\r" not in migration_bytes, "D1 trigger migrations require LF"
+assert b"\r" not in migration_bytes, "D1 trigger migrations require LF"
 assert b"SELECT CASE WHEN" not in migration_bytes, "D1 requires SELECT (CASE WHEN ... END)"
 db.executescript(migration_bytes.decode("utf-8"))
 at = "2026-10-08T12:00:00.000Z"
