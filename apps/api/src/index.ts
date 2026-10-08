@@ -2289,6 +2289,13 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       const reserved = await reserveCredits(env.DB as CommercialDatabase,{
         organizationId,appId:task.app,taskId:task.id,
         idempotencyKey,requestHash,maxCharge:quote.maxCharge,priceVersion:quote.priceVersion,
+      }).catch((error: unknown) => {
+        // Trial credit exhaustion must not imply the seven-day functional trial ended.
+        if (errorCode(error) === "AI_MONTHLY_CREDITS_EXHAUSTED" &&
+            claims.aiEntitlement?.accessState === "trial_active") {
+          throw new Error("AI_TRIAL_CREDITS_EXHAUSTED");
+        }
+        throw error;
       });
       if (reserved.replayed) throw new Error(
         reserved.state === "settled" ? "AI_CREDIT_IDEMPOTENT_REPLAY" : "AI_CREDIT_REQUEST_IN_PROGRESS"
