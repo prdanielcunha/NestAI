@@ -65,6 +65,19 @@ CREATE TABLE IF NOT EXISTS ai_credit_transactions (
 CREATE INDEX IF NOT EXISTS idx_ai_credit_transactions_scope
   ON ai_credit_transactions (organization_hash, app_id, created_at);
 
+-- Commercial grant terms and credit events are immutable audit records.
+-- Corrections must be new grants/adjustments with explicit origin, never rewrite history.
+CREATE TRIGGER IF NOT EXISTS ai_credit_transactions_immutable_update
+BEFORE UPDATE ON ai_credit_transactions
+BEGIN SELECT RAISE(ABORT, 'AI_CREDIT_EVENT_IMMUTABLE'); END;
+CREATE TRIGGER IF NOT EXISTS ai_credit_transactions_immutable_delete
+BEFORE DELETE ON ai_credit_transactions
+BEGIN SELECT RAISE(ABORT, 'AI_CREDIT_EVENT_IMMUTABLE'); END;
+CREATE TRIGGER IF NOT EXISTS ai_credit_grant_terms_immutable
+BEFORE UPDATE OF organization_hash,app_id,source,source_ref,grant_version,total_credits,begins_at,expires_at,created_at
+ON ai_credit_grants
+BEGIN SELECT RAISE(ABORT, 'AI_CREDIT_GRANT_IMMUTABLE'); END;
+
 CREATE TRIGGER IF NOT EXISTS ai_credit_allocation_guard
 BEFORE INSERT ON ai_credit_allocations
 BEGIN
