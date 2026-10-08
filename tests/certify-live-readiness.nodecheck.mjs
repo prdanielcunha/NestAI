@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { certifyLive, allowedOrigins, renderReport } from '../scripts/certify-live-readiness.mjs';
 
 function fakeProduction({ kv = 'ready' } = {}) {
@@ -51,4 +52,15 @@ test('missing KV infrastructure causes an explicit gate failure', async () => {
   const failure = report.checks.find(check => check.id === 'nestai.official-health');
   assert.equal(failure?.status, 'FAIL');
   assert.equal(failure?.reason, 'HEALTH_LAYER_KV_NOT_READY');
+});
+
+
+test('public certification is scheduled after a successful production deploy', () => {
+  const yaml = readFileSync('.github/workflows/certify-live-readiness.yml', 'utf8');
+  assert.match(yaml, /workflow_run:/);
+  assert.match(yaml, /workflows: \['Deploy production'\]/);
+  assert.match(yaml, /branches: \[production\]/);
+  assert.match(yaml, /workflow_run.conclusion == 'success'/);
+  assert.match(yaml, /node scripts\/certify-live-readiness\.mjs/);
+  assert.match(yaml, /actions\/upload-artifact@v4/);
 });
