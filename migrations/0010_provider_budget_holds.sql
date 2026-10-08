@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS ai_provider_budget_holds (
   finalized_micro_usd INTEGER,
   state TEXT NOT NULL DEFAULT 'pending'
     CHECK(state IN ('pending','reserved','settled','released')),
-  required_windows INTEGER NOT NULL CHECK(required_windows BETWEEN 5 AND 8),
+  required_windows INTEGER NOT NULL CHECK(required_windows BETWEEN 6 AND 8),
   created_at TEXT NOT NULL,
   expires_at TEXT NOT NULL,
   finalized_at TEXT,
@@ -70,7 +70,10 @@ BEFORE UPDATE OF state ON ai_provider_budget_holds
 BEGIN
   SELECT (CASE WHEN
     (OLD.state='pending' AND NEW.state='reserved' AND
-      (SELECT COUNT(*) FROM ai_provider_budget_allocations WHERE hold_id=OLD.hold_id)=OLD.required_windows)
+      (SELECT COUNT(*) FROM ai_provider_budget_allocations WHERE hold_id=OLD.hold_id)=OLD.required_windows
+      AND (SELECT COUNT(*) FROM ai_provider_budget_allocations
+        WHERE hold_id=OLD.hold_id AND scope_type IN
+          ('global','environment','provider','task','app','organization'))=6)
     OR
     (OLD.state='reserved' AND NEW.state IN ('settled','released') AND
       NEW.finalized_micro_usd IS NOT NULL AND NEW.finalized_at IS NOT NULL
