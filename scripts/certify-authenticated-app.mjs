@@ -10,7 +10,7 @@ export const CANARY_TASKS = Object.freeze({
   nestjourney: 'journey.followup.summarize',
   nestfinance: 'finance.report.explain',
   musicscale: 'musicscale.song.structure',
-  nestaffiliate: 'nestaffiliate.pin.copy.generate',
+  nestaffiliate: 'affiliate.pin.copy',
   nestlume: 'nestlume.study.answer',
 });
 
