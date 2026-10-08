@@ -36,7 +36,7 @@ export async function certifyAuthenticatedApp({
     if (!authenticated) delete reqHeaders.authorization;
     const response = await fetcher(BASE, {
       method: 'POST', headers: reqHeaders, redirect: 'error',
-      signal: AbortSignal.timeout(20_000),
+      signal: globalThis.AbortSignal.timeout(20_000),
       body: JSON.stringify({
         task, input: PUBLIC_FIXTURE,
         context: { organizationId: tenant, locale: 'pt-BR' },
