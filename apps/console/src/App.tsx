@@ -556,6 +556,28 @@ function CostPage({ locale, data }: { locale: Locale; data: api.CostData | null 
           </div>
         </div>
       </Card>
+      <Card title={tr(locale, "autopilot")} eyebrow="FREE_ONLY · READ ONLY · NO PAID FALLBACK" className="span-12">
+        <p>{tr(locale, "autopilotIntro")}</p>
+        {(data?.freeCapacityAdvisory?.length ?? 0) > 0 ? (
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Provider</th><th>{tr(locale, "quotaStatus")}</th><th>{tr(locale, "remainingQuota")}</th><th>{tr(locale, "providerHealth")}</th><th>{tr(locale, "recommendation")}</th></tr></thead>
+              <tbody>
+                {data?.freeCapacityAdvisory?.map((item) => (
+                  <tr key={item.provider}>
+                    <td><strong>{item.provider}</strong><small>{item.usageCalls.toLocaleString()} {tr(locale, "callsCount")}</small></td>
+                    <td><StatusPill>{item.quota}</StatusPill><small>{tr(locale, "sharedLimit")}: {item.sharedLimit.toLocaleString()}</small></td>
+                    <td>{item.remaining.toLocaleString()} / {item.freeHardLimit.toLocaleString()}</td>
+                    <td><StatusPill>{item.health}</StatusPill></td>
+                    <td><strong>{item.recommendation.replaceAll("_", " ")}</strong><small>{item.reason}</small></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <Empty text={tr(locale, "noHealth")} />}
+        <small>{tr(locale, "autopilotNote")}</small>
+      </Card>
       <Card title="Provider quota policies" className="span-5"><JsonPreview value={data?.policies ?? {}} /></Card>
       <Card title="Usage dimensions" className="span-12">{usage.length ? <JsonPreview value={usage} /> : <Empty text="No usage rows today." />}</Card>
     </div>

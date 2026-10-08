@@ -3,6 +3,7 @@ import { tasks } from "../../task-registry/src/index.js";
 import { models } from "../../model-registry/src/index.js";
 import { providers } from "../../provider-registry/src/index.js";
 import { providerFreeQuota, quotaHealth } from "../../cost-guard/src/index.js";
+import { freeCapacityAdvice } from "../../cost-guard/src/autopilot.js";
 import { getR2Usage, R2_FREE_TIER, R2_SAFETY } from "../../r2-storage/src/index.js";
 import { routeCandidates } from "../../router/src/index.js";
 import { prompts } from "../../prompt-registry/src/index.js";
@@ -199,11 +200,17 @@ export async function controlPlaneObservability(db: D1DatabaseLike, now = new Da
 
 export async function controlPlaneCostQuota(db: D1DatabaseLike, now = new Date()) {
   const day = utcDay(now);
-  const [rows, r2] = await Promise.all([
+  const [rows, r2, health, totals] = await Promise.all([
     db.prepare(
       "SELECT scope_type, scope_id, provider, task, requests, provider_calls FROM daily_usage_dimensions WHERE day = ?1 ORDER BY provider_calls DESC LIMIT 500"
     ).bind(day).all<Record<string, unknown>>(),
     getR2Usage(db, now),
+    db.prepare(
+      "SELECT provider_id,state,success_rate,p95_ms,checked_at FROM cp_provider_health"
+    ).all<{provider_id:string;state:string;success_rate:number|null;p95_ms:number|null;checked_at:string|null}>(),
+    db.prepare(
+      "SELECT scope_type,scope_id,provider,task,provider_calls FROM daily_usage_dimensions WHERE day=?1 AND scope_type='provider' AND task='*'"
+    ).bind(day).all<{scope_type:string;scope_id:string;provider:string;task:string;provider_calls:number}>(),
   ]);
   return {
     day,
@@ -211,6 +218,7 @@ export async function controlPlaneCostQuota(db: D1DatabaseLike, now = new Date()
     paidProvidersLocked: true,
     policies: providerFreeQuota,
     usage: rows.results ?? [],
+    freeCapacityAdvisory: freeCapacityAdvice(totals.results ?? [], health.results ?? [], now),
     r2: {
       ...r2,
       freeTier: R2_FREE_TIER,
