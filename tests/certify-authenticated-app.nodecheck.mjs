@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { CANARY_TASKS, certifyAuthenticatedApp } from '../scripts/certify-authenticated-app.mjs';
 
 function fakeApi({ failPositive = false } = {}) {
@@ -24,6 +25,14 @@ test('all canonical applications have one safe canary task', () => {
   assert.equal(Object.keys(CANARY_TASKS).length, 8);
   assert.equal(CANARY_TASKS.nestaffiliate, 'affiliate.pin.copy');
   assert.equal(CANARY_TASKS.nestlume, 'nestlume.study.answer');
+});
+
+test('every canary task remains mapped to its source-owned text task', () => {
+  const registry = readFileSync('packages/task-registry/src/index.ts', 'utf8');
+  for (const [appId, task] of Object.entries(CANARY_TASKS)) {
+    assert.ok(registry.includes('id: "' + task + '", version: 1, app: "' + appId + '", modality: "text"'),
+      'canary task drifted for app ' + appId);
+  }
 });
 
 test('valid canary executes exactly one provider call after three security negatives', async () => {
