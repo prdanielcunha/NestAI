@@ -11,6 +11,10 @@ migration_bytes = Path("migrations/0008_commercial_credits.sql").read_bytes()
 assert b"\r" not in migration_bytes, "D1 trigger migrations require LF"
 assert b"SELECT CASE WHEN" not in migration_bytes, "D1 requires SELECT (CASE WHEN ... END)"
 db.executescript(migration_bytes.decode("utf-8"))
+revoke_migration = Path("migrations/0009_credit_revocations.sql").read_bytes()
+assert b"\\r" not in revoke_migration, "D1 revocation migration must use LF"
+assert b"SELECT CASE WHEN" not in revoke_migration, "D1 triggers require parenthesized CASE"
+db.executescript(revoke_migration.decode("utf-8"))
 at = "2026-10-08T12:00:00.000Z"
 
 def grant(key, source, amount, end):
@@ -40,7 +44,8 @@ def reserve(id, charge, moment=at):
            SUM(total_credits-consumed_credits-reserved_credits) OVER (
              ORDER BY expires_at,grant_id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior
            FROM ai_credit_grants
-           WHERE organization_hash=? AND app_id=? AND begins_at<=? AND expires_at>?
+           WHERE organization_hash=? AND app_id=? AND revoked_at IS NULL
+             AND begins_at<=? AND expires_at>?
              AND total_credits-consumed_credits-reserved_credits>0
            ), eligible_total AS (SELECT COALESCE(SUM(available),0) AS total FROM eligible)
            INSERT INTO ai_credit_allocations(reservation_id,grant_id,reserved_credits,consumed_credits)
@@ -127,4 +132,36 @@ else:
 assert db.execute("SELECT SUM(reserved_delta) FROM ai_credit_transactions").fetchone()[0]==0
 assert db.execute("SELECT SUM(consumed_delta) FROM ai_credit_transactions").fetchone()[0]==27
 assert db.execute("SELECT COUNT(*) FROM ai_credit_transactions WHERE event_type='release'").fetchone()[0]==1
-print("Commercial credit SQLite invariants PASS: allocation, idempotency, refund, expiry, ledger reconciliation")
+# A verified Stripe refund freezes future reservations but preserves
+# past provider usage and immutable transaction history.
+db.execute(
+  "UPDATE ai_credit_grants SET revoked_at=?,revoke_reason='refund' "
+  "WHERE grant_id='grant_2' AND revoked_at IS NULL",(at,))
+db.execute(
+  "INSERT INTO ai_credit_revocations(revocation_id,grant_id,organization_hash,app_id,source_ref,reason,created_at) "
+  "SELECT 'revocation_2',grant_id,organization_hash,app_id,source_ref,'refund',? "
+  "FROM ai_credit_grants WHERE grant_id='grant_2'",(at,))
+assert db.execute("SELECT revoked_at FROM ai_credit_grants WHERE grant_id='grant_2'").fetchone()[0] == at
+assert db.execute("SELECT COUNT(*) FROM ai_credit_revocations").fetchone()[0] == 1
+assert db.execute("SELECT SUM(consumed_credits) FROM ai_credit_grants").fetchone()[0] == 27
+try:
+    reserve("reservation_after_chargeback",1)
+except sqlite3.IntegrityError as exc:
+    assert "AI_CREDIT_RESERVATION_INCOMPLETE" in str(exc)
+else:
+    raise AssertionError("revoked credit was incorrectly usable")
+assert db.execute("SELECT COUNT(*) FROM ai_credit_reservations WHERE reservation_id='reservation_after_chargeback'").fetchone()[0] == 0
+try:
+    db.execute("UPDATE ai_credit_grants SET revoked_at=? WHERE grant_id='grant_2'",("2027-01-01T00:00:00Z",))
+except sqlite3.IntegrityError as exc:
+    assert "AI_CREDIT_ALREADY_REVOKED_OR_INVALID" in str(exc)
+else:
+    raise AssertionError("revocation was altered")
+try:
+    db.execute("DELETE FROM ai_credit_revocations WHERE grant_id='grant_2'")
+except sqlite3.IntegrityError as exc:
+    assert "AI_CREDIT_REVOCATION_IMMUTABLE" in str(exc)
+else:
+    raise AssertionError("audit revocation deleted")
+
+print("Commercial credit SQLite invariants PASS: allocation, idempotency, reserve/settle, expiry, refund revocation and immutable audit")
