@@ -226,7 +226,7 @@ export { client };
 
 
 export type EvalProbeInput = {
-  targetId: "groq:qwen3.8-27b" | "cloudflare:bge-m3" | "cloudflare:bge-reranker-base" | "nvidia-nim:gpt-oss-20b-eval";
+  targetId: "groq:gpt-oss-safeguard-20b" | "gemini:3.7-flash" | "groq:qwen3.8-27b" | "cloudflare:bge-m3" | "cloudflare:bge-reranker-base" | "nvidia-nim:gpt-oss-20b-eval";
   sanitized: true;
   sensitivity: "P0_PUBLIC" | "P1_INTERNAL";
   prompt?: string;

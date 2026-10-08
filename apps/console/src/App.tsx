@@ -448,10 +448,13 @@ function EvaluationsPage({ data }: { data: api.EvaluationsData | null }) {
           <select value={target} onChange={(e) => setTarget(e.target.value as api.EvalProbeInput["targetId"])}>
             <option value="cloudflare:bge-m3">Cloudflare · BGE-M3 embedding</option>
             <option value="cloudflare:bge-reranker-base">Cloudflare · BGE reranker</option>
+            <option value="groq:gpt-oss-safeguard-20b">Groq · GPT-OSS Safeguard 20B (synthetic safety evaluation)</option>
+            <option value="gemini:3.7-flash">Gemini · 3.7 Flash (public synthetic evaluation)</option>
             <option value="groq:qwen3.8-27b">Groq · Qwen 3.8 27B candidate</option>
             <option value="nvidia-nim:gpt-oss-20b-eval">NVIDIA NIM · GPT-OSS 20B eval-only</option>
           </select>
         </label>
+        <p className="muted">Only public/synthetic evaluation fixtures are sent. Quotas are enforced and counted, paid fallback is disabled, and candidate models never handle customer traffic.</p>
         <div className="sticky-actions">
           <button className="primary" onClick={() => void runProbe()} disabled={busy}>{busy ? "Running…" : "Run sanitized live probe"}</button>
           {status && <span className="muted" role="status">{status}</span>}

@@ -23,7 +23,6 @@ import {
   generateImageWithCloudflare,
   classifyPromptGuardWithGroq,
   rerankWithCloudflare,
-  generateWithNvidiaEval,
   probeGroq,
   probeGemini,
   probeMistral,
@@ -47,6 +46,7 @@ import { verifyGitHubWorkloadToken } from "../../../packages/workload-auth/src/i
 import { queryKnowledge, upsertKnowledge, persistKnowledgeSource, ragOrganizationHash, ragScopedSourceId, applyRerankResults, type VectorizeLike, type RetrievedEvidence } from "../../../packages/rag/src/index.js";
 import { getR2Usage, putR2Object, r2Utf8Size, reconcileR2Inventory, type R2BucketLike } from "../../../packages/r2-storage/src/index.js";
 import { assertEvalTargetAllowed } from "../../../packages/evaluation-lab/src/index.js";
+import { assertFreeSyntheticEvalInput } from "../../../packages/evaluation-lab/src/free-only-eval.js";
 
 type RateLimiter = { limit(input: { key: string }): Promise<{ success: boolean }> };
 
@@ -1187,7 +1187,10 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
     const started = Date.now();
     try {
-      await authenticateAdminRequest(request, env);
+      const claims = await authenticateAdminRequest(request, env);
+      // Evaluation Lab is explicitly synthetic and FREE_ONLY, never paid routing.
+      if (env.AI_BILLING_MODE !== "FREE_ONLY" || env.ALLOW_PAID_FALLBACK !== "false" ||
+          env.AUTO_UPGRADE_PROVIDER !== "false") throw new Error("EVAL_FREE_ONLY_REQUIRED");
       const body = await request.json() as {
         targetId?: string;
         sanitized?: boolean;
@@ -1203,12 +1206,30 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         sensitivity: body.sensitivity ?? "P0_PUBLIC",
         customerTraffic: false,
       });
-      if (target.provider === "nvidia-nim" && env.AI_NVIDIA_EVAL_ENABLED !== "true") {
-        throw new Error("EVAL_NVIDIA_DISABLED");
+      assertFreeSyntheticEvalInput(target, body);
+      if (target.provider === "nvidia-nim") {
+        // NVIDIA evaluation credits are not an approved recurring FREE_ONLY pool.
+        throw new Error("EVAL_NVIDIA_FREE_PLAN_UNVERIFIED");
       }
       if (target.id === "cloudflare:bge-m3" && env.AI_BGE_M3_ENABLED !== "true") {
         throw new Error("EVAL_BGE_M3_DISABLED");
       }
+      if (target.provider !== "cloudflare" && env.AI_EXTERNAL_PROVIDERS_ENABLED !== "true") {
+        throw new Error("EVAL_EXTERNAL_PROVIDERS_DISABLED");
+      }
+      const rate = await env.AI_RATE_LIMITER.limit({ key: "nestai:eval:" + claims.sub });
+      if (!rate.success) throw new Error("RATE_LIMITED");
+      const providerUsage = await getDimensionalUsage(env.DB, {
+        scopeType: "provider", scopeId: target.provider, provider: target.provider,
+      });
+      assertProviderFreeQuota(target.provider, providerUsage.provider_calls, "background");
+      // Reserve capacity before inference. Failed calls still consume upstream
+      // requests, so preaccount the attempt instead of allowing an unmetered path.
+      await incrementDimensionalUsage(env.DB, [
+        { scopeType: "provider", scopeId: target.provider, provider: target.provider },
+        { scopeType: "app", scopeId: "nestai", provider: target.provider, task: "eval.synthetic" },
+        { scopeType: "organization", scopeId: claims.organizationId, provider: target.provider, task: "eval.synthetic" },
+      ]);
 
       let result: unknown;
       if (target.kind === "text_model") {
@@ -1224,9 +1245,11 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
           messages: [{ role: "user", content: body.prompt }],
           maxTokens: 512,
         };
-        result = target.provider === "nvidia-nim"
-          ? await generateWithNvidiaEval(env.NVIDIA_API_KEY ?? "", requestPayload)
-          : await generateWithGroq(env.GROQ_API_KEY ?? "", requestPayload);
+        result = target.provider === "groq"
+          ? await generateWithGroq(env.GROQ_API_KEY ?? "", requestPayload)
+          : target.provider === "gemini"
+            ? await generateWithGemini(env.GEMINI_API_KEY ?? "", requestPayload)
+            : await generateWithCloudflare(env.AI, requestPayload);
       } else if (target.kind === "embedding_model") {
         if (target.provider !== "cloudflare") throw new Error("EVAL_TARGET_PROVIDER_INVALID");
         const texts = Array.isArray(body.texts) ? body.texts.filter((item): item is string => typeof item === "string").slice(0, 16) : [];

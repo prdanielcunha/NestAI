@@ -197,7 +197,7 @@ export type EvalTargetKind = "text_model" | "embedding_model" | "reranker";
 export type EvalTarget = {
   id: string;
   kind: EvalTargetKind;
-  provider: "groq" | "cloudflare" | "nvidia-nim";
+  provider: "groq" | "cloudflare" | "gemini" | "nvidia-nim";
   modelId: string;
   stage: PromotionStage;
   sanitizedOnly: true;
@@ -207,6 +207,29 @@ export type EvalTarget = {
 };
 
 export const evalTargets: Record<string, EvalTarget> = {
+  // Explicit synthetic evaluation; customer routing remains disabled.
+  "groq:gpt-oss-safeguard-20b": {
+    id: "groq:gpt-oss-safeguard-20b",
+    kind: "text_model",
+    provider: "groq",
+    modelId: "openai/gpt-oss-safeguard-20b",
+    stage: "candidate",
+    sanitizedOnly: true,
+    maxSensitivity: "P1_INTERNAL",
+    customerTrafficAllowed: false,
+    productionTrafficAllowed: false,
+  },
+  "gemini:3.7-flash": {
+    id: "gemini:3.7-flash",
+    kind: "text_model",
+    provider: "gemini",
+    modelId: "gemini-3.7-flash",
+    stage: "candidate",
+    sanitizedOnly: true,
+    maxSensitivity: "P1_INTERNAL",
+    customerTrafficAllowed: false,
+    productionTrafficAllowed: false,
+  },
   "groq:qwen3.8-27b": {
     id: "groq:qwen3.8-27b",
     kind: "text_model",
