@@ -23,7 +23,6 @@ import {
   generateImageWithCloudflare,
   classifyPromptGuardWithGroq,
   rerankWithCloudflare,
-  generateWithNvidiaEval,
   probeGroq,
   probeGemini,
   probeMistral,
@@ -1250,9 +1249,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
           ? await generateWithGroq(env.GROQ_API_KEY ?? "", requestPayload)
           : target.provider === "gemini"
             ? await generateWithGemini(env.GEMINI_API_KEY ?? "", requestPayload)
-            : target.provider === "nvidia-nim"
-              ? await generateWithNvidiaEval(env.NVIDIA_API_KEY ?? "", requestPayload)
-              : await generateWithCloudflare(env.AI, requestPayload);
+            : await generateWithCloudflare(env.AI, requestPayload);
       } else if (target.kind === "embedding_model") {
         if (target.provider !== "cloudflare") throw new Error("EVAL_TARGET_PROVIDER_INVALID");
         const texts = Array.isArray(body.texts) ? body.texts.filter((item): item is string => typeof item === "string").slice(0, 16) : [];
