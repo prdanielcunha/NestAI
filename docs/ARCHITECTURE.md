@@ -34,3 +34,19 @@ FREE_ONLY is enforced at boot/policy/router and by quota guards. Provider/model 
 
 The eight canonical application repositories now contain NestAI cutovers on their main branches:
 Hub, Connect, NestLocal, MusicScale, NestFinance, NestJourney, NestAffiliate and NestLume. Production promotion/live certification remains a separate release gate and is not inferred solely from a merged branch.
+
+
+## Commercial AI accounting (staged, 2026-10-08)
+
+The second-generation billing path is documented in
+`docs/COMMERCIAL_CREDITS_V2.md`. It is strictly **disabled** by
+`AI_COMMERCIAL_CREDITS_ENABLED=false`; the authoritative Hub eligibility
+and internal no-card trial live in the Hub domain (companion draft PR).
+NestAI may maintain tenant+app credit grants and reservation/settlement
+ledger, but **never owns Stripe subscription state**. Real provider
+spend must be measured separately, and paid providers stay locked
+without a certified financial budget reservation/kill switch.
+
+Only staged NestLocal text `/v1/run` may be metered when the opt-in flag,
+Hub signed entitlement and grants are all present. Other apps retain
+their existing rights and commercial credit controls do not apply.
