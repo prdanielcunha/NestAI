@@ -115,3 +115,61 @@ Consulta direta aos oito repositórios em GitHub (branches `main` e `production`
 
 Não alterar `DONE` das fases antigas por causa deste PR: esse trabalho
 adiciona fundação comercial desligada e não é comprovação de rollout real.
+
+
+## Verificação complementar de 08/10/2026 — estado de produção e camada financeira
+
+A antiga anotação "implementado somente em PR" na seção comercial anterior é um
+**registro histórico**, não o estado mais recente. A implementação principal
+foi incorporada e parte da infraestrutura está publicada **com as flags OFF**:
+
+- NestAI PR #20 incorporado à main; schema 0008 de grants, reservas e ledger
+  e schema 0009 de revogação foram aplicados no D1 remoto em releases isolados.
+  CI/deploy/readiness públicos aprovados. Não houve ativação de consumo comercial.
+- Hub PR #287 incorporado; trial sem cartão, entitlement, concessão mediante
+  outbox, checkout sem segundo trial para coortes e regras de acesso preparados.
+  Hub PR #293 implantou no backend o outbox de invoice paga, ainda OFF.
+- NestLocal PR #111 incorporado e promovido sob flags desligadas.
+  MusicScale PR #395 incorporado à main; não implica certificação E2E do trial
+  de 14 dias ou migração de dados em production.
+- NestAI PR #27 incorporado à main: controle transacional de *dinheiro* por
+  pior caso de custo, distinto do saldo de créditos; janelas por global,
+  ambiente, modelo/provedor, tarefa, app, organização e opcional user/trial.
+  PR #28 prepara port isolado para production com flags OFF, sujeito a CI e
+  sucesso comprovado de D1 remoto.
+- Hub PR #304 incorporado à main: transporte restrito e desativado por padrão
+  para futuras revogações por refund/dispute. **Ainda não é uma integração
+  certificada ao webhook Stripe**, e não permite reversões a pedido do cliente.
+
+### Evidências versus gates
+
+| Critério | Estado na verificação |
+| --- | --- |
+| Worker/API, FREE_ONLY, JWT/JWKS, App Check, R2, D1, domínio, CI | Produção validada por smoke/readiness público |
+| 8 consumidores registrados, SDK e tasks mapeadas em fonte | Source audit PASS 8/8; NÃO comprova E2E |
+| Cobrança comercial NestLocal e saldo para cliente real | **OFF**, não validado |
+| Trial Hub sem cartão | Implementado no código, gate de coorte OFF |
+| Créditos após invoice.paid e reversão por refund | Infraestrutura/transportes em fases diferentes; fluxo Stripe→Hub→NestAI E2E não certificado |
+| Orçamentos reais por provider/tenant e custos observados | Ledger/budget schema preparados; NÃO vinculados a chamadas de providers |
+| OCR, áudio, importação, streaming e jobs medidos em créditos | NÃO certificado |
+| 8 apps com autenticação/app-check/provider live | PENDENTE de smoke autenticado e testes de interface |
+| Stripe sandbox, cancelamento, retry, upgrade, estorno e múltiplos ciclos | PENDENTE de suite real completa de efeitos no Hub/Firestore |
+| Teste de 10,100,500,1000 clientes, WCAG/mobile, restore/rollback | PENDENTE |
+
+### Regras imutáveis de conclusão
+
+1. Não marcar como 100%, DONE ou pronto para cobrar só porque houve deploy ou
+   aprovação de testes unitários. É necessária prova **do cliente ao provedor
+   e de volta** para cada aplicativo e para os ciclos financeiros.
+2. Não alterar assinatura, plano, organograma, escala, registro Firestore
+   histórico ou cobrança de MusicScale/usuários legados durante a certificação.
+3. Não ligar AI_COMMERCIAL_CREDITS_ENABLED, AI_PAID_ENABLED, trial público ou
+   NESTAI_GRANTS_SYNC_ENABLED até validar isolamento, limites monetários,
+   Firestore e Stripe E2E em coorte explícita, com plano de reversão.
+4. Se um teste requer token efêmero/autorização de serviços e esse recurso não
+   está disponível no CI, registrar BLOQUEADO em vez de PASS.
+5. Preços de plano e créditos são propostas até a certificação de custo,
+   compatibilidade com catálogo Hub e validação das regras Founders.
+
+Documentos-fonte: Blueprint v1.0 de 06/10/2026 e
+`02_NestAI_Creditos_Trial_Pago_Escala_Multicliente.docx` de 08/10/2026.
