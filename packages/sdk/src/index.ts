@@ -198,7 +198,12 @@ export class NestAiClient {
   }
 
   async run<TResult = unknown>(request: RunTaskRequest): Promise<RunTaskResponse<TResult>> {
-    return this.postTask<TResult>("run", request);
+    // Each logical operation has an idempotency key even when the caller does not supply one.
+    // For retries after an uncertain network outcome, callers should persist and reuse this key.
+    return this.postTask<TResult>("run", {
+      ...request,
+      idempotencyKey: request.idempotencyKey ?? request.requestId ?? crypto.randomUUID(),
+    });
   }
 
   /** Commercial credit APIs are opt-in; Hub remains the billing source of truth. */
