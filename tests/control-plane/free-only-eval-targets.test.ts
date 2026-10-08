@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { assertEvalTargetAllowed, evalTargets } from "../../packages/evaluation-lab/src/index.js";
 import { assertFreeSyntheticEvalInput } from "../../packages/evaluation-lab/src/free-only-eval.js";
-import { models } from "../../packages/model-registry/src/index.js";
+import { models, type ModelDescriptor } from "../../packages/model-registry/src/index.js";
 import { routeCandidates } from "../../packages/router/src/index.js";
 
 describe("free candidate live-evaluation guard", () => {
   for (const id of ["groq:gpt-oss-safeguard-20b", "gemini:3.7-flash"]) {
     it("recognizes " + id + " as candidate without production traffic", () => {
-      const model = models[id as keyof typeof models];
+      const model: ModelDescriptor = models[id as keyof typeof models];
       expect(model.status).toBe("preview");
       expect(model.customerTrafficAllowed).toBe(false);
       expect(model.productionTrafficAllowed).toBe(false);
