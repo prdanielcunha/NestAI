@@ -3,6 +3,10 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '17 9 * * *'
+  workflow_run:
+    workflows: ['Deploy production']
+    types: [completed]
+    branches: [production]
   pull_request:
     paths:
       - scripts/certify-live-readiness.mjs
@@ -12,6 +16,7 @@ permissions:
   contents: read
 jobs:
   public-readiness:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
