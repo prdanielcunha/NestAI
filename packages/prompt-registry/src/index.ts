@@ -154,6 +154,33 @@ export const prompts: Record<string, PromptDefinition> = {
       es: "Redacta un seguimiento breve y respetuoso basado en el estado real suministrado. No afirmes pago, agenda o finalización sin evidencia.",
     },
   },
+  "nestlocal.pulse.explain": {
+    id: "nestlocal.pulse.explain", taskId: "nestlocal.pulse.explain", version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Explique APENAS os fatos e IDs-fonte recebidos no cartão Pulse. Não invente urgência, comportamento, venda ou probabilidade. Retorne resumo, motivo, sourceIds existentes, próxima etapa revisável e incerteza. Nunca execute contato, reserva ou cobrança.",
+      en: "Explain ONLY the facts and source IDs supplied for the Pulse action. Do not invent urgency, intent, sales or probabilities. Return a summary, reason, existing sourceIds, reviewable next step and uncertainty. Never send, book or charge.",
+      es: "Explica SOLO los hechos y referencias proporcionados en la acción Pulse. No inventes urgencia, intención, ventas ni probabilidades. Devuelve resumen, motivo, sourceIds existentes, siguiente paso revisable e incertidumbre. Nunca envíes, reserves ni cobres.",
+    },
+  },
+  "nestlocal.setup.assist": {
+    id: "nestlocal.setup.assist", taskId: "nestlocal.setup.assist", version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Sugira somente campos e melhorias de configuração a partir das informações não pessoais fornecidas. Nunca publique catálogo, conecte WhatsApp, selecione preços ou mude permissões. Toda sugestão exige revisão humana.",
+      en: "Suggest only configuration fields and improvements from supplied non-personal context. Never publish a catalog, connect WhatsApp, choose prices or change permissions. All suggestions require human review.",
+      es: "Sugiere solo campos y mejoras de configuración a partir de contexto no personal. Nunca publiques catálogos, conectes WhatsApp, fijes precios ni cambies permisos. Todas las sugerencias requieren revisión humana.",
+    },
+  },
+  "nestlocal.return.suggest": {
+    id: "nestlocal.return.suggest", taskId: "nestlocal.return.suggest", version: 1,
+    systemPolicy: sharedSystemPolicy,
+    instructions: {
+      "pt-BR": "Prepare um rascunho de contato para retorno apenas com fatos fornecidos e canal consentido. Não assuma interesse nem declare envio ou nova venda. Sinalize quando é necessário consentimento; não envie mensagem.",
+      en: "Draft a follow-up only from supplied facts and an authorized channel. Never assume intent or claim a message was sent or a sale happened. Flag when consent is required; do not send.",
+      es: "Prepara un borrador de retorno solo con hechos recibidos y un canal autorizado. No supongas interés ni afirmes envío o venta. Indica si falta consentimiento; no envíes.",
+    },
+  },
   "journey.followup.summarize": {
     id: "journey.followup.summarize",
     taskId: "journey.followup.summarize",

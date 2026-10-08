@@ -27,6 +27,28 @@ const nestLocalRequestSchema = z.object({
   missingFields: z.array(z.string()),
 });
 
+const nestLocalPulseExplainSchema = z.object({
+  summary: z.string().min(1).max(700),
+  reason: z.string().min(1).max(700),
+  sourceIds: z.array(z.string().min(1).max(128)).min(1).max(5),
+  nextStep: z.string().min(1).max(400),
+  uncertainty: z.string().max(400).nullable(),
+});
+const nestLocalSetupAssistSchema = z.object({
+  summary: z.string().min(1).max(500),
+  suggestions: z.array(z.object({
+    field: z.string().min(1).max(60),
+    value: z.string().max(160),
+    reason: z.string().max(260),
+  })).max(5),
+  warnings: z.array(z.string().max(260)).max(5),
+});
+const nestLocalReturnSuggestSchema = z.object({
+  draft: z.string().min(1).max(1200),
+  consentRequired: z.boolean(),
+  warnings: z.array(z.string().max(300)).max(5),
+});
+
 const musicStructureSchema = z.object({
   sections: z.array(z.object({
     name: z.string().min(1),
@@ -349,6 +371,44 @@ export const structuredContracts: Record<string, StructuredContract> = {
         preferredDate: { type: ["string","null"] },
         preferredPeriod: { anyOf: [{type:"null"},{enum:["morning","afternoon","evening"]}] },
         missingFields: { type: "array", items: { type: "string" } },
+      },
+    },
+  },
+  "nestlocal.pulse.explain": {
+    id: "nestlocal.pulse.explain.v1", schema: nestLocalPulseExplainSchema,
+    jsonSchema: { type: "object", additionalProperties: false,
+      required: ["summary","reason","sourceIds","nextStep","uncertainty"],
+      properties: {
+        summary: { type: "string", minLength: 1, maxLength: 700 },
+        reason: { type: "string", minLength: 1, maxLength: 700 },
+        sourceIds: { type: "array", minItems: 1, maxItems: 5, items: { type: "string", minLength: 1, maxLength: 128 } },
+        nextStep: { type: "string", minLength: 1, maxLength: 400 },
+        uncertainty: { type: ["string","null"], maxLength: 400 },
+      },
+    },
+  },
+  "nestlocal.setup.assist": {
+    id: "nestlocal.setup.assist.v1", schema: nestLocalSetupAssistSchema,
+    jsonSchema: { type: "object", additionalProperties: false,
+      required: ["summary","suggestions","warnings"],
+      properties: {
+        summary: { type: "string", minLength: 1, maxLength: 500 },
+        suggestions: { type: "array", maxItems: 5, items: { type: "object", additionalProperties: false,
+          required: ["field","value","reason"],
+          properties: {field:{type:"string",minLength:1,maxLength:60},value:{type:"string",maxLength:160},reason:{type:"string",maxLength:260}},
+        }},
+        warnings: { type: "array", maxItems: 5, items: { type: "string", maxLength: 260 } },
+      },
+    },
+  },
+  "nestlocal.return.suggest": {
+    id: "nestlocal.return.suggest.v1", schema: nestLocalReturnSuggestSchema,
+    jsonSchema: { type: "object", additionalProperties: false,
+      required: ["draft","consentRequired","warnings"],
+      properties: {
+        draft: { type: "string", minLength: 1, maxLength: 1200 },
+        consentRequired: { type: "boolean" },
+        warnings: { type: "array", maxItems: 5, items: { type: "string", maxLength: 300 } },
       },
     },
   },
