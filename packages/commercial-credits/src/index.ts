@@ -185,19 +185,62 @@ export async function grantCredits(
   return { grantId, created: (inserted.meta?.changes ?? 0) > 0 };
 }
 
+export type CreditRevocationReason='refund'|'dispute'|'chargeback'|'billing_correction';
+
+/** Only an authorized Hub service may call this. It never rewrites grant terms
+ * or previously consumed credits; it eliminates further spendable balance and
+ * creates an immutable one-time refund audit event.
+ */
+export async function revokePaidCredits(
+  db:CommercialDatabase,
+  args:CreditContext & {sourceRef:string;reason:CreditRevocationReason},
+):Promise<{grantId:string;revoked:boolean;alreadyRevoked:boolean}>{
+  const organizationHash=await sha256(checkId(args.organizationId,'ORG'));
+  const appId=checkId(args.appId,'APP');
+  if(appId!=='nestlocal')throw Error('AI_CREDIT_REVOCATION_APP_DENIED');
+  const sourceRef=checkId(args.sourceRef,'SOURCE_REF');
+  if(!/^nestlocal:paid:in_[A-Za-z0-9]{6,}$/.test(sourceRef))
+    throw Error('AI_CREDIT_REVOCATION_SOURCE_INVALID');
+  if(!['refund','dispute','chargeback','billing_correction'].includes(args.reason))
+    throw Error('AI_CREDIT_REVOCATION_REASON_INVALID');
+  const grantId=await sha256([organizationHash,appId,'plan',sourceRef].join(':'));
+  const original=await db.prepare(
+    "SELECT grant_id,revoked_at FROM ai_credit_grants WHERE grant_id=?1 AND organization_hash=?2 AND app_id=?3 AND source='plan' AND source_ref=?4"
+  ).bind(grantId,organizationHash,appId,sourceRef)
+    .first<{grant_id:string;revoked_at:string|null}>();
+  if(!original)throw Error('AI_CREDIT_GRANT_NOT_FOUND');
+  if(original.revoked_at)return {grantId,revoked:false,alreadyRevoked:true};
+  const now=new Date().toISOString();
+  const update=db.prepare(
+    "UPDATE ai_credit_grants SET revoked_at=?2,revoke_reason=?3 WHERE grant_id=?1 AND revoked_at IS NULL"
+  ).bind(grantId,now,args.reason);
+  const audit=db.prepare(
+    "INSERT INTO ai_credit_revocations(revocation_id,grant_id,organization_hash,app_id,source_ref,reason,created_at) "+
+    "SELECT ?2,grant_id,organization_hash,app_id,source_ref,revoke_reason,revoked_at "+
+    "FROM ai_credit_grants WHERE grant_id=?1 AND revoked_at IS NOT NULL "+
+    "ON CONFLICT(grant_id) DO NOTHING"
+  ).bind(grantId,'revoke_'+grantId);
+  await db.batch([update,audit]);
+  const after=await db.prepare(
+    'SELECT revoked_at FROM ai_credit_grants WHERE grant_id=?1'
+  ).bind(grantId).first<{revoked_at:string|null}>();
+  if(!after?.revoked_at)throw Error('AI_CREDIT_REVOCATION_NOT_APPLIED');
+  return {grantId,revoked:after.revoked_at===now,alreadyRevoked:after.revoked_at!==now};
+}
+
 export async function getCreditBalance(db: CommercialDatabase, args: CreditContext, at = new Date()) {
   const org = await sha256(checkId(args.organizationId,"ORG"));
   const appId = checkId(args.appId,"APP");
   const row = await db.prepare(
     "SELECT COALESCE(SUM(total_credits-consumed_credits-reserved_credits),0) AS available, " +
     "COALESCE(SUM(reserved_credits),0) AS reserved, COALESCE(SUM(consumed_credits),0) AS consumed " +
-    "FROM ai_credit_grants WHERE organization_hash=?1 AND app_id=?2 AND begins_at<=?3 AND expires_at>?3"
+    "FROM ai_credit_grants WHERE organization_hash=?1 AND app_id=?2 AND revoked_at IS NULL AND begins_at<=?3 AND expires_at>?3"
   ).bind(org, appId, at.toISOString()).first<{available:number;reserved:number;consumed:number}>();
   const detail = await db.prepare(
     "SELECT source,expires_at,total_credits,consumed_credits,reserved_credits, " +
     "(total_credits-consumed_credits-reserved_credits) AS available " +
     "FROM ai_credit_grants WHERE organization_hash=?1 AND app_id=?2 " +
-    "AND begins_at<=?3 AND expires_at>?3 ORDER BY expires_at,grant_id"
+    "AND revoked_at IS NULL AND begins_at<=?3 AND expires_at>?3 ORDER BY expires_at,grant_id"
   ).bind(org,appId,at.toISOString()).all<{
     source:CreditSource;expires_at:string;total_credits:number;consumed_credits:number;
     reserved_credits:number;available:number;
@@ -259,7 +302,7 @@ export async function reserveCredits(
     " SELECT grant_id,total_credits-consumed_credits-reserved_credits AS available, " +
     " SUM(total_credits-consumed_credits-reserved_credits) OVER (" +
     " ORDER BY expires_at,grant_id ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prior " +
-    " FROM ai_credit_grants WHERE organization_hash=?1 AND app_id=?2 AND begins_at<=?3 " +
+    " FROM ai_credit_grants WHERE organization_hash=?1 AND app_id=?2 AND revoked_at IS NULL AND begins_at<=?3 " +
     " AND expires_at>?3 AND total_credits-consumed_credits-reserved_credits>0" +
     "), eligible_total AS (SELECT COALESCE(SUM(available),0) AS total FROM eligible) " +
     "INSERT INTO ai_credit_allocations(reservation_id,grant_id,reserved_credits,consumed_credits) " +
