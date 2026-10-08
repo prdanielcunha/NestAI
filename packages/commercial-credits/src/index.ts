@@ -44,6 +44,14 @@ type ReservationContext = CreditContext & {
 };
 
 const PRICES_VERSION = 1;
+
+// NestLocal proposals, not commercially certified until margin evidence passes.
+export const NESTLOCAL_DRAFT_GRANTS = Object.freeze({
+  trial: 40,
+  essential: 150,
+  growth: 500,
+  pro: 1500,
+});
 const TEXT_TASKS = new Set([
   "nestlocal.request.extract", "nestlocal.quote.compose",
   "nestlocal.followup.compose", "nestlocal.pulse.explain",
@@ -148,6 +156,17 @@ export async function grantCredits(
   checkAmount(args.amount, "GRANT");
   checkAmount(args.grantVersion, "VERSION");
   requireDates(args.beginsAt, args.expiresAt);
+  if (args.appId === "nestlocal") {
+    if (args.source === "trial" && args.amount !== NESTLOCAL_DRAFT_GRANTS.trial) {
+      throw new Error("AI_CREDIT_TRIAL_AMOUNT_INVALID");
+    }
+    if (args.source === "plan" && ![NESTLOCAL_DRAFT_GRANTS.essential,
+      NESTLOCAL_DRAFT_GRANTS.growth,NESTLOCAL_DRAFT_GRANTS.pro].includes(args.amount)) {
+      throw new Error("AI_CREDIT_PLAN_AMOUNT_INVALID");
+    }
+    // Add-on prices/packs must not be sold before margin certification.
+    if (args.source === "addon") throw new Error("AI_CREDIT_ADDON_NOT_CERTIFIED");
+  }
   const organizationHash = await sha256(args.organizationId);
   const grantId = await sha256([organizationHash,args.appId,args.source,args.sourceRef].join(":"));
   const now = new Date().toISOString();
@@ -285,6 +304,12 @@ export async function finalizeCredits(
     "WHERE reservation_id=?1 AND state='reserved'"
   ).bind(args.reservationId,args.success?"settled":"released",charge,at.toISOString());
   await db.batch([rankedUpdate,finalize]);
+  const committed = await db.prepare(
+    "SELECT state,actual_charge FROM ai_credit_reservations WHERE reservation_id=?1"
+  ).bind(args.reservationId).first<{state:CreditReservation["state"];actual_charge:number}>();
+  if (committed?.state !== (args.success?"settled":"released") || committed.actual_charge !== charge) {
+    throw new Error("AI_CREDIT_FINALIZATION_CONFLICT");
+  }
   return {reservationId:args.reservationId,state:args.success?"settled":"released",
     maxCharge:row.max_charge,actualCharge:charge,replayed:false};
 }
