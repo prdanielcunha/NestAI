@@ -12,7 +12,7 @@ assert b"\r" not in migration_bytes, "D1 trigger migrations require LF"
 assert b"SELECT CASE WHEN" not in migration_bytes, "D1 requires SELECT (CASE WHEN ... END)"
 db.executescript(migration_bytes.decode("utf-8"))
 revoke_migration = Path("migrations/0009_credit_revocations.sql").read_bytes()
-assert b"\\r" not in revoke_migration, "D1 revocation migration must use LF"
+assert b"\r" not in revoke_migration, "D1 revocation migration must use LF"
 assert b"SELECT CASE WHEN" not in revoke_migration, "D1 triggers require parenthesized CASE"
 db.executescript(revoke_migration.decode("utf-8"))
 at = "2026-10-08T12:00:00.000Z"
