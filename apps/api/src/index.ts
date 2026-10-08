@@ -2338,7 +2338,8 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     await recordProviderCost(env.DB as CommercialDatabase,{
       organizationId,appId:task.app,taskId:task.id,requestRef:requestId,
       providerId:execution.result.provider,modelId:execution.result.model,
-      tokensIn:execution.result.usage?.inputTokens,tokensOut:execution.result.usage?.outputTokens,
+      ...(execution.result.usage?.inputTokens !== undefined ? {tokensIn:execution.result.usage.inputTokens} : {}),
+      ...(execution.result.usage?.outputTokens !== undefined ? {tokensOut:execution.result.usage.outputTokens} : {}),
       // Until verified account-level billing data exists, actual provider cost is unknown (NULL).
       actualMicroUsd:null,estimateMicroUsd:null,
     }).catch((error) => console.error(JSON.stringify({requestId,code:errorCode(error),stage:"cost_record"})));
