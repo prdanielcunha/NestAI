@@ -160,8 +160,8 @@ export async function grantCredits(
     if (args.source === "trial" && args.amount !== NESTLOCAL_DRAFT_GRANTS.trial) {
       throw new Error("AI_CREDIT_TRIAL_AMOUNT_INVALID");
     }
-    if (args.source === "plan" && ![NESTLOCAL_DRAFT_GRANTS.essential,
-      NESTLOCAL_DRAFT_GRANTS.growth,NESTLOCAL_DRAFT_GRANTS.pro].includes(args.amount)) {
+    if (args.source === "plan" && !(new Set<number>([NESTLOCAL_DRAFT_GRANTS.essential,
+      NESTLOCAL_DRAFT_GRANTS.growth,NESTLOCAL_DRAFT_GRANTS.pro])).has(args.amount)) {
       throw new Error("AI_CREDIT_PLAN_AMOUNT_INVALID");
     }
     // Add-on prices/packs must not be sold before margin certification.
