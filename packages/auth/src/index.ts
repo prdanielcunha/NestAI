@@ -10,6 +10,7 @@ export type NestAiClaims = {
   locale?: "pt-BR" | "en" | "es";
   session?: string;
   tokenType?: "user" | "guest" | "service";
+  aiEntitlement?: import("../../commercial-credits/src/index.js").HubAiEntitlement;
   appCheckAppId?: string;
   iat: number;
   exp: number;
