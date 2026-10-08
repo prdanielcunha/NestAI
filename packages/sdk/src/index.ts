@@ -209,7 +209,7 @@ export class NestAiClient {
   /** Commercial credit APIs are opt-in; Hub remains the billing source of truth. */
   async quoteCredits(task: string): Promise<{
     quote: {creditsEstimate:number;maxCharge:number;priceVersion:number;requiresConfirmation:boolean;description:string};
-    balance: {available:number;reserved:number;consumed:number;asOf:string};
+    balance: {available:number;reserved:number;consumed:number;asOf:string;grants:Array<{source:string;expiresAt:string;total:number;available:number;reserved:number;consumed:number}>};
   }> {
     const response = await this.fetcher(new URL("credits/quote",this.baseUrl),{
       method:"POST",headers:await this.headers(),
@@ -217,17 +217,17 @@ export class NestAiClient {
     });
     const result=await response.json() as {error?:string;requestId?:string;
       quote:{creditsEstimate:number;maxCharge:number;priceVersion:number;requiresConfirmation:boolean;description:string};
-      balance:{available:number;reserved:number;consumed:number;asOf:string}};
+      balance:{available:number;reserved:number;consumed:number;asOf:string;grants:Array<{source:string;expiresAt:string;total:number;available:number;reserved:number;consumed:number}>}};
     if(!response.ok)throw new NestAiError(result.error??"SDK_QUOTE_FAILED",response.status,result.requestId);
     return result;
   }
 
-  async creditBalance(): Promise<{available:number;reserved:number;consumed:number;asOf:string}> {
+  async creditBalance(): Promise<{available:number;reserved:number;consumed:number;asOf:string;grants:Array<{source:string;expiresAt:string;total:number;available:number;reserved:number;consumed:number}>}> {
     const headers=await this.headers();
     headers["x-millionsnest-org"]=this.organizationId();
     const response=await this.fetcher(new URL("credits/balance",this.baseUrl),{headers});
     const result=await response.json() as {error?:string;requestId?:string;
-      available:number;reserved:number;consumed:number;asOf:string};
+      available:number;reserved:number;consumed:number;asOf:string;grants:Array<{source:string;expiresAt:string;total:number;available:number;reserved:number;consumed:number}>};
     if(!response.ok)throw new NestAiError(result.error??"SDK_BALANCE_FAILED",response.status,result.requestId);
     return result;
   }
