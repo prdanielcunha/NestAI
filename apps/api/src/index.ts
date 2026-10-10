@@ -710,7 +710,7 @@ async function executeJobEnvelope(env: Env, job: JobEnvelope): Promise<unknown> 
       candidates,
       keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
       breaker,
-      maxRetriesPerCandidate: 1,
+      maxRetriesPerCandidate: task.id === "affiliate.pin.strategy" ? 0 : 1,
       execute: async ({ candidate }) => {
         await recordProviderAttempt(env, claims, task, job.organizationId, candidate.provider);
         return withTimeout(
@@ -2344,7 +2344,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       candidates: quotaCandidates,
       keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
       breaker,
-      maxRetriesPerCandidate: 1,
+      maxRetriesPerCandidate: task.id === "affiliate.pin.strategy" ? 0 : 1,
       execute: async ({ candidate }) => {
         await recordProviderAttempt(env, claims, task, organizationId, candidate.provider);
         return withTimeout(
