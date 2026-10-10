@@ -707,7 +707,7 @@ async function executeJobEnvelope(env: Env, job: JobEnvelope): Promise<unknown> 
     const candidates = await safeCandidates(env, prepared, "text", structured !== null);
     const prompt = await buildResolvedTaskPrompt(env, { taskId: task.id, locale: job.locale, input: job.payload });
     const execution = await executeWithSafeFallback({
-      candidates,
+      candidates: task.id === "affiliate.pin.strategy" ? candidates.filter((candidate, index, all) => all.findIndex((other) => other.provider === candidate.provider) === index).slice(0, 2) : candidates,
       keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
       breaker,
       maxRetriesPerCandidate: task.id === "affiliate.pin.strategy" ? 0 : 1,
@@ -2341,7 +2341,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     }
 
     const execution = await executeWithSafeFallback({
-      candidates: quotaCandidates,
+      candidates: task.id === "affiliate.pin.strategy" ? quotaCandidates.filter((candidate, index, all) => all.findIndex((other) => other.provider === candidate.provider) === index).slice(0, 2) : quotaCandidates,
       keyOf: (candidate) => candidate.provider + ":" + candidate.providerModelId,
       breaker,
       maxRetriesPerCandidate: task.id === "affiliate.pin.strategy" ? 0 : 1,
