@@ -328,6 +328,41 @@ const affiliateScreenshotJsonSchema: JsonSchema = {
   },
 };
 
+const affiliatePinStrategySchema=z.object({
+  productType:z.string().min(3).max(100),
+  buyerIntent:z.string().min(8).max(230),
+  audience:z.string().min(5).max(160),
+  positioning:z.string().min(8).max(230),
+  factsUsed:z.array(z.string().max(160)).max(8),
+  unknowns:z.array(z.string().max(180)).max(8),
+  angles:z.array(z.string().min(5).max(140)).length(3),
+  titles:z.array(z.string().min(20).max(100)).length(3),
+  descriptions:z.array(z.string().min(110).max(500)).length(2),
+  keywords:z.array(z.string().min(3).max(90)).min(5).max(10),
+  recommendedBoard:z.string().min(5).max(90),
+  headline:z.string().min(8).max(60),
+  cta:z.string().min(4).max(60),
+});
+const affiliatePinStrategyJsonSchema:JsonSchema={
+  type:"object",additionalProperties:false,
+  required:["productType","buyerIntent","audience","positioning","factsUsed","unknowns","angles","titles","descriptions","keywords","recommendedBoard","headline","cta"],
+  properties:{
+    productType:{type:"string",minLength:3,maxLength:100},
+    buyerIntent:{type:"string",minLength:8,maxLength:230},
+    audience:{type:"string",minLength:5,maxLength:160},
+    positioning:{type:"string",minLength:8,maxLength:230},
+    factsUsed:{type:"array",maxItems:8,items:{type:"string",maxLength:160}},
+    unknowns:{type:"array",maxItems:8,items:{type:"string",maxLength:180}},
+    angles:{type:"array",minItems:3,maxItems:3,items:{type:"string",minLength:5,maxLength:140}},
+    titles:{type:"array",minItems:3,maxItems:3,items:{type:"string",minLength:20,maxLength:100}},
+    descriptions:{type:"array",minItems:2,maxItems:2,items:{type:"string",minLength:110,maxLength:500}},
+    keywords:{type:"array",minItems:5,maxItems:10,items:{type:"string",minLength:3,maxLength:90}},
+    recommendedBoard:{type:"string",minLength:5,maxLength:90},
+    headline:{type:"string",minLength:8,maxLength:60},
+    cta:{type:"string",minLength:4,maxLength:60},
+  },
+};
+
 const affiliatePinSchema = z.object({
   title: z.string().min(1).max(100),
   description: z.string().min(1).max(500),
@@ -537,6 +572,11 @@ export const structuredContracts: Record<string, StructuredContract> = {
         needsHumanReview: { const: true },
       },
     },
+  },
+  "affiliate.pin.strategy": {
+    id:"affiliate.pin.strategy.v1",
+    schema:affiliatePinStrategySchema,
+    jsonSchema:affiliatePinStrategyJsonSchema,
   },
   "affiliate.pin.copy": {
     id: "affiliate.pin.v1",
