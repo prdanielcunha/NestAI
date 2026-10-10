@@ -15,7 +15,7 @@ describe("affiliate.pin.strategy production timeout hotfix",()=>{
     expect(buildTaskPrompt({taskId:task.id,locale:"pt-BR",input:{product:{title:"Cadeira rosa"}}}).messages[0]?.content).toContain("titles");
   });
   it("isolates the bounded fallback to this one task",()=>{
-    const worker=readFileSync(new URL("../apps/api/src/index.ts",import.meta.url),"utf8");
+    const worker=readFileSync("apps/api/src/index.ts","utf8");
     expect(worker).toContain('maxRetriesPerCandidate: task.id === "affiliate.pin.strategy" ? 0 : 1');
     expect(worker).toContain('other.provider === candidate.provider');
   });
