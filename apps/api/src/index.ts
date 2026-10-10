@@ -1974,7 +1974,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
           cached: false,
           fallbackUsed: execution.fallbackUsed,
           retries: execution.retries,
-          humanReviewRequired: prepared.task.id === "journey.form.extract",
+          humanReviewRequired: ["journey.form.extract","affiliate.screenshot.extract"].includes(prepared.task.id),
         },
       });
     } catch (error) {

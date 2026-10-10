@@ -42,5 +42,5 @@ export const ecosystemApps: AppManifest[] = [
     "musicscale.release-note.generate",
   ], defaultLocale: "pt-BR", enabled: true },
   { appId: "nestlume", displayName: "NestLume", allowedTasks: ["nestlume.study.answer","nestlume.study.grounded","nestlume.entity.explain","nestlume.embedding.generate"], defaultLocale: "pt-BR", enabled: true },
-  { appId: "nestaffiliate", displayName: "NestAffiliate", allowedTasks: ["affiliate.product.analyze","affiliate.pin.copy","affiliate.creative.generate"], defaultLocale: "pt-BR", enabled: true },
+  { appId: "nestaffiliate", displayName: "NestAffiliate", allowedTasks: ["affiliate.screenshot.extract","affiliate.product.analyze","affiliate.pin.copy","affiliate.creative.generate"], defaultLocale: "pt-BR", enabled: true },
 ];
