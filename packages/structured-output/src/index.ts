@@ -301,6 +301,33 @@ const journeyFormSchema = z.object({
   needsHumanReview: z.literal(true),
 });
 
+const affiliateScreenshotSchema = z.object({
+  marketplace: z.enum(["MELI","SHOPEE","UNKNOWN"]),
+  title: z.string().max(240).nullable(),
+  productUrl: z.string().max(600).nullable(),
+  price: z.number().min(0).nullable(),
+  seller: z.string().max(160).nullable(),
+  rating: z.number().min(0).max(5).nullable(),
+  reviewCount: z.number().int().min(0).nullable(),
+  visibleFacts: z.array(z.string().max(240)).max(8),
+  warnings: z.array(z.string().max(240)).max(8),
+});
+const affiliateScreenshotJsonSchema: JsonSchema = {
+  type:"object",additionalProperties:false,
+  required:["marketplace","title","productUrl","price","seller","rating","reviewCount","visibleFacts","warnings"],
+  properties:{
+    marketplace:{enum:["MELI","SHOPEE","UNKNOWN"]},
+    title:{type:["string","null"],maxLength:240},
+    productUrl:{type:["string","null"],maxLength:600},
+    price:{type:["number","null"],minimum:0},
+    seller:{type:["string","null"],maxLength:160},
+    rating:{type:["number","null"],minimum:0,maximum:5},
+    reviewCount:{type:["integer","null"],minimum:0},
+    visibleFacts:{type:"array",maxItems:8,items:{type:"string",maxLength:240}},
+    warnings:{type:"array",maxItems:8,items:{type:"string",maxLength:240}},
+  },
+};
+
 const affiliatePinSchema = z.object({
   title: z.string().min(1).max(100),
   description: z.string().min(1).max(500),
@@ -445,6 +472,11 @@ export const structuredContracts: Record<string, StructuredContract> = {
   "musicscale.live.metadata.normalize": { id: "musicscale.live.metadata.normalize.v1", schema: musicScaleLiveSchema, jsonSchema: musicScaleLiveJsonSchema },
   "musicscale.live.post-service.summary": { id: "musicscale.live.post-service.summary.v1", schema: musicScaleLiveSchema, jsonSchema: musicScaleLiveJsonSchema },
   "musicscale.live.pre-service-risk.explain": { id: "musicscale.live.pre-service-risk.explain.v1", schema: musicScaleLiveSchema, jsonSchema: musicScaleLiveJsonSchema },
+  "affiliate.screenshot.extract": {
+    id: "affiliate.screenshot.extract.v1",
+    schema: affiliateScreenshotSchema,
+    jsonSchema: affiliateScreenshotJsonSchema,
+  },
   "affiliate.product.analyze": {
     id: "affiliate.product.analyze.v1",
     schema: affiliateProductSchema,
