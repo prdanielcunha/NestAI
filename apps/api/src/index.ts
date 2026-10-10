@@ -2347,7 +2347,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       maxRetriesPerCandidate: 1,
       execute: async ({ candidate }) => {
         await recordProviderAttempt(env, claims, task, organizationId, candidate.provider);
-        return withTimeout(
+        const providerOutput = await withTimeout(
           (signal) => generateForRoute(env, {
             route: candidate,
             messages: prompt.messages,
@@ -2357,6 +2357,14 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
           }),
           task.timeoutMs,
         );
+        // For the AI-first Pinterest strategist, malformed structured output
+        // is an execution failure and MUST trigger the next FREE model.
+        // Previously it was validated only AFTER fallback exhausted, making
+        // one weak provider response turn into a total customer-facing outage.
+        if (task.id === "affiliate.pin.strategy") {
+          validateStructuredText(task.id, providerOutput.text);
+        }
+        return providerOutput;
       },
     });
 
