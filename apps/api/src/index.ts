@@ -2362,7 +2362,14 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
         // Previously it was validated only AFTER fallback exhausted, making
         // one weak provider response turn into a total customer-facing outage.
         if (task.id === "affiliate.pin.strategy") {
-          validateStructuredText(task.id, providerOutput.text);
+          try {
+            validateStructuredText(task.id, providerOutput.text);
+          } catch {
+            // The first free model returned unusable JSON: try the next FREE
+            // provider instead of aborting the entire strategy workflow.
+            // Do not include model output or private product text in the error.
+            throw new Error("PROVIDER_TEMPORARY_INVALID_OUTPUT");
+          }
         }
         return providerOutput;
       },
