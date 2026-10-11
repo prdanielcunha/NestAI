@@ -5,7 +5,7 @@ import {validateStructuredText} from "../packages/structured-output/src/index.js
 
 describe("affiliate.pin.strategy invalid JSON provider recovery",()=>{
  it("reclassifies invalid AI JSON as safe provider fallback without leaking output",()=>{
-  const source=readFileSync(new URL("../apps/api/src/index.ts",import.meta.url),"utf8");
+  const source=readFileSync("apps/api/src/index.ts","utf8");
   expect(source).toContain('throw new Error("PROVIDER_TEMPORARY_INVALID_OUTPUT")');
   expect(()=>validateStructuredText("affiliate.pin.strategy","not JSON")).toThrow("OUTPUT_SCHEMA_INVALID_JSON");
   expect(isTransientProviderError(new Error("PROVIDER_TEMPORARY_INVALID_OUTPUT"))).toBe(true);
