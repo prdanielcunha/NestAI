@@ -15,7 +15,7 @@ export function validateManifest(manifest: AppManifest): void {
 export const ecosystemApps: AppManifest[] = [
   { appId: "millionsnest", displayName: "MillionsNest Hub", allowedTasks: ["hub.operational.summary","hub.incident.explain"], defaultLocale: "pt-BR", enabled: true },
   { appId: "connect", displayName: "MillionsNest Connect", allowedTasks: ["connect.message.classify","connect.reply.suggest","connect.audio.transcribe"], defaultLocale: "pt-BR", enabled: true },
-  { appId: "nestlocal", displayName: "NestLocal", allowedTasks: ["nestlocal.request.extract","nestlocal.quote.compose","nestlocal.followup.compose"], defaultLocale: "pt-BR", enabled: true },
+  { appId: "nestlocal", displayName: "NestLocal", allowedTasks: ["nestlocal.request.extract","nestlocal.quote.compose","nestlocal.followup.compose","nestlocal.audio.transcribe"], defaultLocale: "pt-BR", enabled: true },
   { appId: "nestjourney", displayName: "NestJourney", allowedTasks: ["journey.form.extract","journey.followup.summarize"], defaultLocale: "pt-BR", enabled: true },
   { appId: "nestfinance", displayName: "NestFinance", allowedTasks: [
     "finance.receipt.extract",
