@@ -122,7 +122,7 @@ function OverviewPage({ locale, health, data }: { locale: Locale; health: api.He
       <div className="hero panel span-12">
         <div className="hero-grid">
           <div>
-            <div className="eyebrow">MILLIONSNEST / NESTAI</div>
+            <div className="eyebrow"><img src="/brand/millionsnest/v1/mark-192.png" alt="" aria-hidden="true" width={20} height={20} style={{display:"inline-block",width:20,height:20,objectFit:"contain",verticalAlign:"middle",marginRight:8}} />MILLIONSNEST / NESTAI</div>
             <h1>Intelligence Mission Control</h1>
             <p>Auth, policy, privacy, routing, providers, quota e observabilidade em uma única superfície operacional.</p>
           </div>
